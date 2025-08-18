@@ -1,0 +1,37 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload your Data</title>
+    <link rel="stylesheet" href="{% static 'css/upload.css' %}">
+</head>
+<body>
+    <div class="container">
+        <!-- Menú lateral -->
+        <div class="sidebar">
+            <div class="logo">DataScope</div>
+            <nav>
+                <a href="#">Explore Insights</a>
+                <a href="#">Visualizations</a>
+                <a href="#">Brainy Suggestions</a>
+                <a href="#">About DataScope</a>
+                <a href="#">Contact / Support</a>
+            </nav>
+        </div>
+
+        <!-- Contenido principal -->
+        <div class="main-content">
+            <h1>Upload your Data</h1>
+            <div class="upload-box">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit" class="submit-btn">Submit</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

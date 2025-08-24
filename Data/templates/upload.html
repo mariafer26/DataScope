@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Upload Data - DataScope{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/upload.css' %}">
+<style>
+    .upload-container {
+        max-width: 800px;
+        margin: 6rem auto;
+        padding: 3rem;
+        background: #fff;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    .upload-container h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #2D1B69;
+        margin-bottom: 1.5rem;
+    }
+
+    .upload-box {
+        border: 2px dashed #8B45C7;
+        border-radius: 15px;
+        padding: 2rem;
+        background: rgba(139, 69, 199, 0.05);
+        transition: all 0.3s ease;
+    }
+
+    .upload-box:hover {
+        background: rgba(139, 69, 199, 0.1);
+        transform: translateY(-3px);
+    }
+
+    .upload-box form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: center;
+    }
+
+    .submit-btn {
+        padding: 0.8rem 2rem;
+        background: linear-gradient(135deg, #8B45C7, #A855C7);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(139, 69, 199, 0.3);
+    }
+
+    .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(139, 69, 199, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="upload-container">
+    <h1>Upload your Data</h1>
+    <p style="margin-bottom: 2rem; color: #666;">
+        Carga tus archivos de datos y comienza a analizarlos con la potencia de DataScope 🚀
+    </p>
+    <div class="upload-box">
+        <form method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" class="submit-btn">Submit</button>
+        </form>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    console.log("Upload page loaded successfully.");
+</script>
+{% endblock %}

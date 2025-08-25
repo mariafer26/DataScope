@@ -90,3 +90,81 @@ body {
 .submit-btn:hover {
     background-color: #793f8a;
 }
+
+.table-responsive {
+    overflow: auto;
+    max-height: 420px;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    margin-top: 1rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+.data-table th, .data-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+}
+.data-table th {
+    background: #f6f0ff;
+    color: #2D1B69;
+    position: sticky;
+    top: 0;
+}
+
+/* Métricas */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.stat-card {
+    background: #fff;
+    border: 1px solid rgba(139,69,199,0.15);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+}
+.stat-title {
+    margin: 0 0 .5rem 0;
+    color: #2D1B69;
+    font-weight: 700;
+}
+.stat-list li { 
+    margin: .25rem 0; 
+}
+.preview-metrics {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+@media (min-width: 900px) {
+  .preview-metrics { grid-template-columns: 1fr 1fr; }
+}
+
+.stat-list { list-style: none; padding: 0; margin: 0; }
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap; /* por si el viewport es angosto */
+}
+
+.field label {
+  font-weight: 600;
+  color: #2D1B69;
+}
+
+.field .hint {
+  color: #666;
+}
+
+.field .error {
+  color: #b3261e;
+  font-weight: 600;
+}

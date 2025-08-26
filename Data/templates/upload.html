@@ -182,6 +182,16 @@
     </div>
   </section>
   {% endif %}
+  {# --- FR12: respuesta como texto o tabla --- #}
+  {% if answer or result %}
+<section class="results-container">
+  <h2 class="results-title">Respuesta</h2>
+  {% include 'components/result_viewer.html'
+     with data=answer|default:result title="Respuesta" loading=loading error=error %}
+</section>
+{% endif %}
+
+
 
 {% endblock %}
 

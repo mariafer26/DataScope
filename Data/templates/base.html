@@ -412,7 +412,12 @@
             }
         }
     </style>
-    {% block extra_css %}{% endblock %}
+   {% block extra_css %}
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/result_viewer.css' %}">
+{% endblock %}
+
+    
 </head>
 <body>
     <!-- Header -->

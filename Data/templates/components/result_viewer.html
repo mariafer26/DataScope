@@ -1,0 +1,65 @@
+{% load result_extras %}
+
+<div class="ds-resultviewer">
+  {% if title %}
+    <div class="ds-rv-header"><h3 class="ds-rv-title">{{ title }}</h3></div>
+  {% endif %}
+
+  {% if loading %}
+    <div class="ds-rv-status">Cargando…</div>
+  {% elif error %}
+    <div class="ds-rv-error">⚠ {{ error }}</div>
+  {% elif data|is_tabular %}
+    {% with table=data|as_table %}
+      <div class="ds-rv-tablewrap">
+        <table class="ds-rv-table" data-ds-sortable="1">
+          <thead>
+            <tr>
+              {% for h in table.headers %}<th tabindex="0">{{ h }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in table.rows %}
+              <tr>
+                {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+              </tr>
+            {% empty %}
+              <tr><td colspan="{{ table.headers|length }}">Sin resultados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endwith %}
+  {% else %}
+    <div class="ds-rv-text"><pre>{{ data|to_display_text }}</pre></div>
+  {% endif %}
+</div>
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+(function(){
+  const tables = document.querySelectorAll('table.ds-rv-table[data-ds-sortable="1"]');
+  tables.forEach(table => {
+    const getCell = (tr, i) => tr.children[i]?.innerText ?? "";
+    const cmp = (i, asc) => (a,b) => {
+      const A = getCell(a,i).trim(), B = getCell(b,i).trim();
+      const nA = parseFloat(A.replace(/,/g,'')), nB = parseFloat(B.replace(/,/g,''));
+      const nums = !isNaN(nA) && !isNaN(nB);
+      let r = nums ? (nA - nB) : A.localeCompare(B, undefined, {numeric:true, sensitivity:'base'});
+      return asc ? r : -r;
+    };
+    table.querySelectorAll('th').forEach((th, i) => {
+      let asc = true;
+      th.addEventListener('click', () => {
+        const tb = table.tBodies[0];
+        const rows = Array.from(tb.querySelectorAll('tr')).sort(cmp(i, asc));
+        rows.forEach(r => tb.appendChild(r));
+        asc = !asc;
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}
+

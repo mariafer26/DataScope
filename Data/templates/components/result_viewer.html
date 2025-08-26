@@ -35,8 +35,6 @@
   {% endif %}
 </div>
 
-{% block extra_js %}
-{{ block.super }}
 <script>
 (function(){
   const tables = document.querySelectorAll('table.ds-rv-table[data-ds-sortable="1"]');
@@ -61,5 +59,4 @@
   });
 })();
 </script>
-{% endblock %}
 

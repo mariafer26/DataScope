@@ -138,7 +138,7 @@ def upload_file_view(request):
                     {
                         "Column": str(c),
                         "Type": str(df[c].dtype),
-                        "Nulls": int(df[c].isna().sum()),
+                        "BlankSpaces": int(df[c].isna().sum()),
                     }
                     for c in df.columns
                 ]

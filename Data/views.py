@@ -53,6 +53,11 @@ def upload_file_view(request):
     stats = {}
     stats_checked = False
 
+    
+    answer = None   # puede ser texto o una tabla (list[dict] / list[list])
+    loading = False
+    error = ""
+
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
@@ -127,8 +132,20 @@ def upload_file_view(request):
                 else:
                     messages.info(request, "No numeric columns were detected in the file.")
 
+                
+                # Resumen por columna: tipo y cantidad de nulos (tabla)
+                answer = [
+                    {
+                        "Column": str(c),
+                        "Type": str(df[c].dtype),
+                        "BlankSpaces": int(df[c].isna().sum()),
+                    }
+                    for c in df.columns
+                ]
+
             except Exception as e:
                 messages.error(request, f"Error processing file: {str(e)}")
+                error = str(e)   #mostrar en ResultViewer
     else:
         form = UploadFileForm()
 
@@ -139,6 +156,10 @@ def upload_file_view(request):
             'form': form,
             'table_html': table_html,
             'stats': stats,
-            'stats_checked': stats_checked
+            'stats_checked': stats_checked,
+            
+            'answer': answer,
+            'loading': loading,
+            'error': error,
         }
     )

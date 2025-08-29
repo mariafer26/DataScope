@@ -1,0 +1,11 @@
+.ds-resultviewer{border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff}
+.ds-rv-header{margin-bottom:8px}
+.ds-rv-title{margin:0;font-size:1.1rem;font-weight:600}
+.ds-rv-status{color:#6b7280;font-style:italic}
+.ds-rv-error{color:#b91c1c;font-weight:600}
+.ds-rv-text pre{white-space:pre-wrap;word-wrap:break-word;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace}
+.ds-rv-tablewrap{overflow-x:auto}
+.ds-rv-table{width:100%;border-collapse:collapse;font-size:.95rem}
+.ds-rv-table th,.ds-rv-table td{border:1px solid #e5e7eb;padding:8px 10px;text-align:left}
+.ds-rv-table thead th{background:#f9fafb;cursor:pointer;user-select:none}
+.ds-rv-table tbody tr:nth-child(even){background:#fafafa}

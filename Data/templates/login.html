@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - DataScope{% endblock %}
+
+{% block content %}
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8B45C7 0%, #A855C7 50%, #2D1B69 100%);">
+    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 20px; padding: 3rem; width: 100%; max-width: 400px;">
+        <h2 style="color: white; text-align: center; margin-bottom: 2rem;">Iniciar Sesión</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div style="background: rgba(255, 0, 0, 0.2); color: white; padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit" style="width: 100%; padding: 1rem; background: #8B45C7; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
+                Iniciar Sesión
+            </button>
+        </form>
+        
+        <p style="color: white; text-align: center; margin-top: 1rem;">
+            ¿No tienes cuenta? <a href="{% url 'register' %}" style="color: #E879F9;">Regístrate</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

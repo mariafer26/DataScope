@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro - DataScope{% endblock %}
+
+{% block content %}
+<div style="min-height: 100vh; padding: 3rem 1rem; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #8B45C7 0%, #A855C7 50%, #2D1B69 100%); box-sizing: border-box;">
+
+    <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 20px; padding: 3rem; width: 100%; max-width: 400px;">
+        <h2 style="color: white; text-align: center; margin-bottom: 2rem;">Crear Cuenta</h2>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div style="background: rgba(0, 255, 0, 0.2); color: white; padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            
+            {% for field in form %}
+                <div style="margin-bottom: 1.5rem;">
+                    <label for="{{ field.id_for_label }}" style="color: white; font-weight: bold;">{{ field.label }}</label>
+                    {{ field }}
+                    
+                    {% if field.help_text %}
+                        <small style="display:block; color: #ddd;">{{ field.help_text }}</small>
+                    {% endif %}
+                    
+                    {% for error in field.errors %}
+                        <small style="color: #ffcccc; display:block;">{{ error }}</small>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+            {% if form.non_field_errors %}
+                <div style="color: #ffcccc; margin-bottom: 1rem;">
+                    {% for error in form.non_field_errors %}
+                        <small>{{ error }}</small><br>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <button type="submit" style="width: 100%; padding: 1rem; background: #8B45C7; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
+                Registrarse
+            </button>
+        </form>
+
+        <p style="color: white; text-align: center; margin-top: 1rem;">
+            ¿Ya tienes cuenta? <a href="{% url 'login' %}" style="color: #E879F9;">Inicia sesión</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

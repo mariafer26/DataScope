@@ -26,6 +26,7 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('register/', views.register_view, name='register'),
     path('upload/', views.upload_file_view, name='upload_file'),
+    path('ask/', views.ask_question_view, name='ask_question'),
 ]
 
 if settings.DEBUG:

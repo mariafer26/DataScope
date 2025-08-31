@@ -163,3 +163,18 @@ def upload_file_view(request):
             'error': error,
         }
     )
+
+def ask_question_view(request):
+    question = ''
+    answer = None
+    if request.method == 'POST':
+        question = request.POST.get('question', '')
+        if question:
+            # Placeholder for NLP engine integration
+            answer = f"This is a placeholder answer to your question: '{question}'"
+    
+    return render(request, 'upload.html', {
+        'question': question,
+        'answer': answer,
+        'form': UploadFileForm(),
+    })

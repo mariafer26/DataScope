@@ -144,6 +144,24 @@
     </div>
   </section>
 
+  <!-- FR10: Natural Language Question Input -->
+  <section class="upload-container">
+    <h1>Ask a question</h1>
+    <p style="margin-bottom: 2rem; color: #666; text-align:center;">
+      Use natural language to ask a question about your data 🚀
+    </p>
+    <div class="upload-box">
+      <form method="POST" action="{% url 'ask_question' %}">
+        {% csrf_token %}
+        <div class="field">
+          <label for="question">Your question</label>
+          <input type="text" name="question" id="question" style="width: 100%; padding: 0.5rem; border-radius: 5px; border: 1px solid #ccc;">
+        </div>
+        <button type="submit" class="submit-btn">Ask</button>
+      </form>
+    </div>
+  </section>
+
   {% if table_html or stats_checked %}
   <section class="results-container">
     <div class="preview-metrics">

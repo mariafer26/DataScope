@@ -9,6 +9,8 @@ import pandas as pd
 import re
 from django.db import connection
 from . import ai_services
+from sqlalchemy import create_engine
+from django.conf import settings
 
 def home(request):
     return render(request, 'base.html')
@@ -99,9 +101,11 @@ def upload_file_view(request):
 
                 table_name = _sanitize_table_name(file.name)
                 request.session['table_name'] = table_name
+                request.session.save()
 
-                with connection.cursor() as cursor:
-                    df.to_sql(table_name, connection, if_exists='replace', index=False)
+                db_path = settings.DATABASES['default']['NAME']
+                engine = create_engine(f'sqlite:///{db_path}')
+                df.to_sql(table_name, engine, if_exists='replace', index=False)
                 
                 messages.success(request, f'Data loaded into table: {table_name}')
 
@@ -164,31 +168,10 @@ def upload_file_view(request):
             except Exception as e:
                 messages.error(request, f"Error processing file: {str(e)}")
                 error = str(e)
+        else:
+            messages.error(request, f"Form validation failed. Errors: {form.errors}")
     else:
         form = UploadFileForm()
-
-    if request.method == 'POST' and 'question' in request.POST:
-        question = request.POST.get('question', '')
-        table_name = request.session.get('table_name')
-
-        if question and table_name:
-            try:
-                loading = True
-                sql_query = ai_services.get_sql_from_question(question, table_name)
-                
-                with connection.cursor() as cursor:
-                    cursor.execute(sql_query)
-                    columns = [col[0] for col in cursor.description]
-                    answer = [
-                        dict(zip(columns, row))
-                        for row in cursor.fetchall()
-                    ]
-
-            except Exception as e:
-                error = f"Error executing query: {str(e)}"
-                messages.error(request, error)
-            finally:
-                loading = False
 
     return render(
         request,
@@ -206,6 +189,9 @@ def upload_file_view(request):
 
 
 def ask_question_view(request):
+    if request.method == 'GET':
+        return redirect('upload_file')
+
     question = ''
     answer = None
     error = ''
@@ -218,15 +204,17 @@ def ask_question_view(request):
         if question and table_name:
             try:
                 loading = True
-                sql_query = ai_services.get_sql_from_question(question, table_name)
-                
-                with connection.cursor() as cursor:
-                    cursor.execute(sql_query)
-                    columns = [col[0] for col in cursor.description]
-                    answer = [
-                        dict(zip(columns, row))
-                        for row in cursor.fetchall()
-                    ]
+                if "summary" in question.lower() or "analyze" in question.lower():
+                    answer = ai_services.get_summary_from_data(table_name)
+                else:
+                    sql_query = ai_services.get_sql_from_question(question, table_name)
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql_query)
+                        columns = [col[0] for col in cursor.description]
+                        answer = [
+                            dict(zip(columns, row))
+                            for row in cursor.fetchall()
+                        ]
 
             except Exception as e:
                 error = f"Error executing query: {str(e)}"

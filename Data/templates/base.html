@@ -35,7 +35,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 2rem;
+            padding: 0 1rem;
         }
 
         .logo {
@@ -47,7 +47,7 @@
 
         .nav-links {
             display: flex;
-            gap: 2rem;
+            gap: 1rem;
             list-style: none;
         }
 
@@ -61,6 +61,20 @@
         }
 
         .nav-links a:hover {
+            background: rgba(139, 69, 199, 0.1);
+            color: #8B45C7;
+        }
+
+        .nav-text {
+            text-decoration: none;
+            color: #2D1B69;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+
+        .nav-text:hover {
             background: rgba(139, 69, 199, 0.1);
             color: #8B45C7;
         }
@@ -427,14 +441,31 @@
             <nav>
                 <ul class="nav-links">
                     <li><a href="{% url 'home' %}">Inicio</a></li>
+                    {% if request.resolver_match.url_name == 'home' %}
                     <li><a href="#features">Características</a></li>
-                    <li><a href="#about">Acerca de</a></li>
-                    <li><a href="#contact">Contacto</a></li>
+                    {% if user.is_authenticated %}
+                    <li><a href="#funcionalities">Funcionalidades</a></li>
+                    {% endif %}
+                    {% else %}
+                    {% if user.is_authenticated %}
+                    <li><a href="{% url 'upload_file' %}">Subir archivo</a></li>
+                    <li><a href="#">Analisis inteligente</a></li>
+                    {% else %}
+                    {% endif %}
+                    {% endif %}
                 </ul>
             </nav>
             <div class="auth-buttons">
+            {% if user.is_authenticated %}
+                <div class="user-info">
+                    <span class="nav-text">Bienvenido, {{ user.username }}</span>
+                    <a href="#" class="btn-login">Dashboard</a>
+                    <a href="{% url 'logout' %}" class="btn-register">Cerrar sesión</a>
+                </div>
+            {% else %}
                 <a href="{% url 'login' %}" class="btn-login">Iniciar Sesión</a>
                 <a href="{% url 'register' %}" class="btn-register">Registrarse</a>
+            {% endif %}
             </div>
         </div>
     </header>
@@ -502,6 +533,25 @@
                 </div>
             </div>
         </section>
+        {% if user.is_authenticated %}
+        <section id="funcionalities" class="features">
+            <h2 class="section-title">Funcionalidades Principales</h2>
+            <div class="features-grid">
+                <a href="{% url 'upload_file' %}">
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3 class="feature-title">Sube tus archivos</h3>
+                </div>
+                </a>
+                <a href="{% url 'ask_question' %}">
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3 class="feature-title">Análisis inteligentes</h3>
+                </div>
+                </a>
+            </div>
+        </section>
+        {% endif %}
         {% endblock %}
     </main>
 

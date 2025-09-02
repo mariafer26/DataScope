@@ -1,7 +1,8 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import UploadFileForm
-from django.contrib.auth import authenticate, login
+from .models import UploadedFile
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
 import os
@@ -43,6 +44,10 @@ def register_view(request):
         form = CustomUserCreationForm()
     return render(request, 'register.html', {'form': form})
 
+def logout_view(request):
+    logout(request)  
+    return redirect("home") 
+
 
 def upload_file_view(request):
     """
@@ -60,17 +65,16 @@ def upload_file_view(request):
 
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
+
         if form.is_valid():
-            file = request.FILES['file']
-            upload_path = os.path.join('media', 'uploads')
-            os.makedirs(upload_path, exist_ok=True)
-            file_path = os.path.join(upload_path, file.name)
+            uploaded_file = form.save(commit=False)
+            uploaded_file.user = request.user 
+            uploaded_file.name = uploaded_file.file.name
+            uploaded_file.save()
 
-            with open(file_path, 'wb+') as destination:
-                for chunk in file.chunks():
-                    destination.write(chunk)
+            file_path = uploaded_file.file.path
+            ext = os.path.splitext(file_path)[1].lower()
 
-            ext = os.path.splitext(file.name)[1].lower()
             try:
                 if ext == '.csv':
                     try:
@@ -163,6 +167,8 @@ def upload_file_view(request):
             'error': error,
         }
     )
+
+
 
 def ask_question_view(request):
     question = ''

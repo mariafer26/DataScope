@@ -1,11 +1,11 @@
 from django import forms
+from .models import UploadedFile
 import os
 
-class UploadFileForm(forms.Form):
-    file = forms.FileField(
-        label="Select a file",
-        help_text="Only .csv or .xlsx files are allowed"
-    )
+class UploadFileForm(forms.ModelForm):
+    class Meta:
+        model = UploadedFile
+        fields = ['file']
 
     def clean_file(self):
         uploaded_file = self.cleaned_data['file']

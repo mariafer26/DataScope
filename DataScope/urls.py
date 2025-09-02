@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib.auth import views as auth_views
 from Data import views
 
 urlpatterns = [
@@ -25,6 +26,7 @@ urlpatterns = [
     path("admin/", admin.site.urls), 
     path('login/', views.login_view, name='login'),
     path('register/', views.register_view, name='register'),
+    path('logout/', views.logout_view, name='logout'),
     path('upload/', views.upload_file_view, name='upload_file'),
     path('ask/', views.ask_question_view, name='ask_question'),
 

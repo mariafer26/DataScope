@@ -237,10 +237,9 @@ def ask_question_view(request):
             error = "Please upload a file first."
             messages.error(request, error)
 
-    return render(request, 'upload.html', {
+    return render(request, 'answer.html', {
         'question': question,
         'answer': answer,
-        'form': UploadFileForm(),
         'error': error,
         'loading': loading,
     })

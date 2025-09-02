@@ -6,7 +6,9 @@ from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
 import os
 import pandas as pd
-
+import re
+from django.db import connection
+from . import ai_services
 
 def home(request):
     return render(request, 'base.html')
@@ -44,21 +46,29 @@ def register_view(request):
     return render(request, 'register.html', {'form': form})
 
 
+def _sanitize_table_name(name):
+    # Remove the extension
+    name = os.path.splitext(name)[0]
+    # Replace invalid characters with underscores
+    name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    # Ensure it doesn't start with a number
+    if name[0].isdigit():
+        name = '_' + name
+    return name
+
 def upload_file_view(request):
     """
-    Sube archivo, guarda en media/uploads, lee con pandas
-    y calcula métricas básicas para columnas numéricas.
+    Sube archivo, guarda en media/uploads, lee con pandas,
+    lo guarda en la base de datos y calcula métricas básicas.
     """
     table_html = None
     stats = {}
     stats_checked = False
-
-    
-    answer = None   # puede ser texto o una tabla (list[dict] / list[list])
+    answer = None
     loading = False
     error = ""
 
-    if request.method == "POST":
+    if request.method == "POST" and 'file' in request.FILES:
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
             file = request.FILES['file']
@@ -86,6 +96,15 @@ def upload_file_view(request):
                     request,
                     f"File uploaded successfully! {len(df)} rows loaded."
                 )
+
+                table_name = _sanitize_table_name(file.name)
+                request.session['table_name'] = table_name
+
+                with connection.cursor() as cursor:
+                    df.to_sql(table_name, connection, if_exists='replace', index=False)
+                
+                messages.success(request, f'Data loaded into table: {table_name}')
+
 
                 table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
 
@@ -133,7 +152,6 @@ def upload_file_view(request):
                     messages.info(request, "No numeric columns were detected in the file.")
 
                 
-                # Resumen por columna: tipo y cantidad de nulos (tabla)
                 answer = [
                     {
                         "Column": str(c),
@@ -145,9 +163,32 @@ def upload_file_view(request):
 
             except Exception as e:
                 messages.error(request, f"Error processing file: {str(e)}")
-                error = str(e)   #mostrar en ResultViewer
+                error = str(e)
     else:
         form = UploadFileForm()
+
+    if request.method == 'POST' and 'question' in request.POST:
+        question = request.POST.get('question', '')
+        table_name = request.session.get('table_name')
+
+        if question and table_name:
+            try:
+                loading = True
+                sql_query = ai_services.get_sql_from_question(question, table_name)
+                
+                with connection.cursor() as cursor:
+                    cursor.execute(sql_query)
+                    columns = [col[0] for col in cursor.description]
+                    answer = [
+                        dict(zip(columns, row))
+                        for row in cursor.fetchall()
+                    ]
+
+            except Exception as e:
+                error = f"Error executing query: {str(e)}"
+                messages.error(request, error)
+            finally:
+                loading = False
 
     return render(
         request,
@@ -157,24 +198,49 @@ def upload_file_view(request):
             'table_html': table_html,
             'stats': stats,
             'stats_checked': stats_checked,
-            
             'answer': answer,
             'loading': loading,
             'error': error,
         }
     )
 
+
 def ask_question_view(request):
     question = ''
     answer = None
+    error = ''
+    loading = False
+    
     if request.method == 'POST':
         question = request.POST.get('question', '')
-        if question:
-            # Placeholder for NLP engine integration
-            answer = f"This is a placeholder answer to your question: '{question}'"
-    
+        table_name = request.session.get('table_name')
+
+        if question and table_name:
+            try:
+                loading = True
+                sql_query = ai_services.get_sql_from_question(question, table_name)
+                
+                with connection.cursor() as cursor:
+                    cursor.execute(sql_query)
+                    columns = [col[0] for col in cursor.description]
+                    answer = [
+                        dict(zip(columns, row))
+                        for row in cursor.fetchall()
+                    ]
+
+            except Exception as e:
+                error = f"Error executing query: {str(e)}"
+                messages.error(request, error)
+            finally:
+                loading = False
+        elif not table_name:
+            error = "Please upload a file first."
+            messages.error(request, error)
+
     return render(request, 'upload.html', {
         'question': question,
         'answer': answer,
         'form': UploadFileForm(),
+        'error': error,
+        'loading': loading,
     })

@@ -2,3 +2,4 @@ django
 pandas
 google-generativeai
 python-dotenv
+openpyxl

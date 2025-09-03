@@ -1,0 +1,288 @@
+{% extends "base.html" %} 
+{% load static %} 
+{% block title %}
+Analyze Data - DataScope
+{% endblock %} 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/upload.css' %}" />
+<style>
+  .upload-container {
+    max-width: 1200px;
+    margin: 6rem auto 2rem;
+    padding: 3rem;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .upload-container h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #2d1b69;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  /* caja de subida */
+  .upload-box {
+    border: 2px dashed #8b45c7;
+    border-radius: 15px;
+    padding: 2rem;
+    background: rgba(139, 69, 199, 0.05);
+    transition: all 0.3s ease;
+    max-width: 480px; /* cambia a 100% si quieres ancho completo */
+    margin: 0 auto;
+  }
+  .upload-box:hover {
+    background: rgba(139, 69, 199, 0.1);
+    transform: translateY(-3px);
+  }
+  .upload-box form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: stretch; /* importante para que la fila ocupe ancho */
+  }
+
+  /* fila label + input + ayuda */
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .field label {
+    font-weight: 600;
+    color: #2d1b69;
+  }
+  .field .hint {
+    color: #666;
+  }
+  .field .error {
+    color: #b3261e;
+    font-weight: 600;
+  }
+
+  .submit-btn {
+    padding: 0.8rem 2rem;
+    background: linear-gradient(135deg, #8b45c7, #a855c7);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 69, 199, 0.3);
+    align-self: center; /* centrado del botón */
+  }
+  .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 69, 199, 0.4);
+  }
+
+  /* --- tarjeta de resultados separada --- */
+  .results-container {
+    max-width: 1200px;
+    margin: 4rem auto;
+    padding: 2rem 3rem;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  }
+  .results-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #2d1b69;
+    margin: 1rem 0 1rem;
+    text-align: left;
+  }
+
+  .content {
+    margin-top: 4rem;
+  }
+
+  /* layout lado a lado en pantallas grandes */
+  .preview-metrics {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  @media (min-width: 992px) {
+    .preview-metrics {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .table-responsive {
+    overflow: auto;
+    max-height: 420px;
+    border: 1px solid #eee;
+    border-radius: 12px;
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+  }
+  .data-table th {
+    background: #f6f0ff;
+    color: #2d1b69;
+    position: sticky;
+    top: 0;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  @media (min-width: 576px) {
+    .stats-grid {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+  }
+  .stat-card {
+    background: #fff;
+    border: 1px solid rgba(139, 69, 199, 0.15);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+  }
+  .stat-title {
+    margin: 0 0 0.5rem 0;
+    color: #2d1b69;
+    font-weight: 700;
+  }
+  .stat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Fix de color (el body global es blanco) */
+  .results-container,
+  .results-container p,
+  .results-container li,
+  .results-container td {
+    color: #2d1b69;
+  }
+  .data-table td {
+    color: #2d1b69;
+  }
+  .stat-list li {
+    color: #2d1b69;
+  }
+  .upload-box,
+  .upload-box * {
+    color: #2d1b69;
+  }
+</style>
+{% endblock %} 
+
+{% block content %} 
+{% if messages %}
+<div style="max-width: 1200px; margin: 4rem auto">
+  {% for message in messages %}
+  <div
+    style="
+      padding: 0.75rem;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      background: rgba(139, 69, 199, 0.1);
+      color: #2d1b69;
+    "
+  >
+    {{ message }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<section class="content">
+    <h1 style="color:#2d1b69; padding-top:2rem">Resultados de {{ uploaded_file.name }}</h1>
+  {% if table_html or stats_checked %}
+  <section class="results-container">
+    
+    <div class="preview-metrics">
+      {% if table_html %}
+      <div>
+        <h2 class="results-title">Data preview</h2>
+        <div class="table-responsive">{{ table_html|safe }}</div>
+      </div>
+      {% endif %}
+
+      <div>
+        {% if stats %}
+        <h2 class="results-title">Basic metrics</h2>
+        <div class="stats-grid">
+          {% for col, m in stats.items %}
+          <div class="stat-card">
+            <h4 class="stat-title">{{ col }}</h4>
+            <ul class="stat-list">
+              <li><strong>Mean:</strong> {{ m.mean }}</li>
+              <li><strong>Median:</strong> {{ m.median }}</li>
+              <li><strong>Min:</strong> {{ m.min }}</li>
+              <li><strong>Max:</strong> {{ m.max }}</li>
+              <li><strong>Count:</strong> {{ m.count }}</li>
+            </ul>
+          </div>
+          {% endfor %}
+        </div>
+        {% elif stats_checked %}
+        <p style="color: #666; margin-top: 0.5rem">No numeric columns found.</p>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Preguntas -->
+  <section class="upload-container">
+    <h1>Ask a question</h1>
+    <p style="margin-bottom: 2rem; color: #666; text-align: center">
+      Use natural language to ask a question about your data 🚀
+    </p>
+    <div class="upload-box">
+      <form method="POST" action="{% url 'ask_question' uploaded_file.id %}">
+        {% csrf_token %}
+        <div class="field">
+          <label for="question">Your question</label>
+          <input
+            type="text"
+            name="question"
+            id="question"
+            style="
+              width: 100%;
+              padding: 0.5rem;
+              border-radius: 5px;
+              border: 1px solid #ccc;
+            "
+          />
+        </div>
+        <button type="submit" class="submit-btn">Ask</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Respuestas -->
+  {% if answer %}
+  <section class="results-container">
+    <h2 class="results-title">Respuesta</h2>
+    {% include "components/result_viewer.html" with data=answer loading=loading
+    error=error %}
+  </section>
+  {% elif result %}
+  <section class="results-container">
+    <h2 class="results-title">Respuesta</h2>
+    {% include "components/result_viewer.html" with data=result loading=loading
+    error=error %}
+  </section>
+  {% endif %}
+</section>
+
+{% endblock %}

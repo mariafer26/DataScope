@@ -50,137 +50,131 @@ def logout_view(request):
 
 
 def upload_file_view(request):
-    """
-    Sube archivo, guarda en media/uploads, lee con pandas
-    y calcula métricas básicas para columnas numéricas.
-    """
-    table_html = None
-    stats = {}
-    stats_checked = False
-
-    
-    answer = None   # puede ser texto o una tabla (list[dict] / list[list])
-    loading = False
-    error = ""
-
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
-
         if form.is_valid():
             uploaded_file = form.save(commit=False)
-            uploaded_file.user = request.user 
+            uploaded_file.user = request.user
             uploaded_file.name = uploaded_file.file.name
             uploaded_file.save()
 
-            file_path = uploaded_file.file.path
-            ext = os.path.splitext(file_path)[1].lower()
-
-            try:
-                if ext == '.csv':
-                    try:
-                        df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
-                    except Exception:
-                        df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
-                elif ext == '.xlsx':
-                    df = pd.read_excel(file_path)
-                else:
-                    raise ValueError("Unsupported file extension")
-
-                messages.success(
-                    request,
-                    f"File uploaded successfully! {len(df)} rows loaded."
-                )
-
-                table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
-
-                numeric_df = df.select_dtypes(include='number')
-                stats_checked = True
-
-                if numeric_df.empty:
-                    df_coerced = df.copy()
-
-                    def _coerce_to_numeric(series: pd.Series) -> pd.Series:
-                        t = series.astype(str).str.replace(r'\s|\u00A0', '', regex=True)
-                        num1 = pd.to_numeric(t, errors='coerce')
-                        t_alt = t.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                        num2 = pd.to_numeric(t_alt, errors='coerce')
-                        return num2 if num2.notna().sum() > num1.notna().sum() else num1
-
-                    for col in df_coerced.columns:
-                        if df_coerced[col].dtype == 'object':
-                            coerced = _coerce_to_numeric(df_coerced[col])
-                            if coerced.notna().any():
-                                df_coerced[col] = coerced
-
-                    numeric_df = df_coerced.select_dtypes(include='number')
-
-                if not numeric_df.empty:
-                    for col in numeric_df.columns:
-                        s = numeric_df[col].dropna()
-                        if s.empty:
-                            continue
-
-                        def r(x):
-                            try:
-                                return round(float(x), 2)
-                            except Exception:
-                                return x
-
-                        stats[col] = {
-                            'mean': r(s.mean()),
-                            'median': r(s.median()),
-                            'min': r(s.min()),
-                            'max': r(s.max()),
-                            'count': int(s.count())
-                        }
-                else:
-                    messages.info(request, "No numeric columns were detected in the file.")
-
-                
-                # Resumen por columna: tipo y cantidad de nulos (tabla)
-                answer = [
-                    {
-                        "Column": str(c),
-                        "Type": str(df[c].dtype),
-                        "BlankSpaces": int(df[c].isna().sum()),
-                    }
-                    for c in df.columns
-                ]
-
-            except Exception as e:
-                messages.error(request, f"Error processing file: {str(e)}")
-                error = str(e)   #mostrar en ResultViewer
+            messages.success(request, "File uploaded successfully!")
+            return redirect("analyze_file", file_id=uploaded_file.id)  
+        else:
+            messages.error(request, "There was a problem with the file.")
     else:
         form = UploadFileForm()
 
+    return render(request, "upload.html", {"form": form})
+
+
+def analyze_file_view(request, file_id):
+    uploaded_file = UploadedFile.objects.get(id=file_id)
+    file_path = uploaded_file.file.path
+    ext = os.path.splitext(file_path)[1].lower()
+
+    table_html = None
+    stats = {}
+    answer = None
+    error = ""
+    stats_checked = False
+
+    try:
+        if ext == '.csv':
+            try:
+                df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
+            except Exception:
+                df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
+        elif ext == '.xlsx':
+            df = pd.read_excel(file_path)
+        else:
+            raise ValueError("Unsupported file extension")
+
+        table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
+
+        numeric_df = df.select_dtypes(include="number")
+        stats_checked = True
+
+        if numeric_df.empty:
+            df_coerced = df.copy()
+            def _coerce_to_numeric(series: pd.Series) -> pd.Series:
+                t = series.astype(str).str.replace(r'\s|\u00A0', '', regex=True)
+                num1 = pd.to_numeric(t, errors="coerce")
+                t_alt = t.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                num2 = pd.to_numeric(t_alt, errors="coerce")
+                return num2 if num2.notna().sum() > num1.notna().sum() else num1
+
+            for col in df_coerced.columns:
+                if df_coerced[col].dtype == "object":
+                    coerced = _coerce_to_numeric(df_coerced[col])
+                    if coerced.notna().any():
+                        df_coerced[col] = coerced
+            numeric_df = df_coerced.select_dtypes(include="number")
+
+        if not numeric_df.empty:
+            for col in numeric_df.columns:
+                s = numeric_df[col].dropna()
+                if s.empty:
+                    continue
+
+                def r(x):
+                    try:
+                        return round(float(x), 2)
+                    except Exception:
+                        return x
+
+                stats[col] = {
+                    "mean": r(s.mean()),
+                    "median": r(s.median()),
+                    "min": r(s.min()),
+                    "max": r(s.max()),
+                    "count": int(s.count()),
+                }
+        else:
+            messages.info(request, "No numeric columns were detected in the file.")
+
+        answer = [
+            {
+                "Column": str(c),
+                "Type": str(df[c].dtype),
+                "BlankSpaces": int(df[c].isna().sum()),
+            }
+            for c in df.columns
+        ]
+
+    except Exception as e:
+        messages.error(request, f"Error processing file: {str(e)}")
+        error = str(e)
+
     return render(
         request,
-        'upload.html',
+        "analyze.html", 
         {
-            'form': form,
-            'table_html': table_html,
-            'stats': stats,
-            'stats_checked': stats_checked,
-            
-            'answer': answer,
-            'loading': loading,
-            'error': error,
-        }
+            "uploaded_file": uploaded_file,
+            "table_html": table_html,
+            "stats": stats,
+            "stats_checked": stats_checked,
+            "answer": answer,
+            "error": error,
+        },
     )
 
-
-
-def ask_question_view(request):
-    question = ''
+def ask_question_view(request, file_id):
+    uploaded_file = UploadedFile.objects.get(id=file_id)
+    question = ""
     answer = None
-    if request.method == 'POST':
-        question = request.POST.get('question', '')
+
+    if request.method == "POST":
+        question = request.POST.get("question", "")
         if question:
-            # Placeholder for NLP engine integration
-            answer = f"This is a placeholder answer to your question: '{question}'"
-    
-    return render(request, 'upload.html', {
-        'question': question,
-        'answer': answer,
-        'form': UploadFileForm(),
-    })
+            answer = f"Placeholder answer to: '{question}' (for file {uploaded_file.name})"
+
+    return render(
+        request,
+        "analyze.html",
+        {
+            "uploaded_file": uploaded_file,
+            "question": question,
+            "answer": answer,
+        },
+    )

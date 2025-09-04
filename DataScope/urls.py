@@ -29,7 +29,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('upload/', views.upload_file_view, name='upload_file'),
     path('analyze/<int:file_id>/', views.analyze_file_view, name='analyze_file'),
-    path("ask/<int:file_id>/", views.ask_question_view, name="ask_question"),
+    path("ask/", views.ask_question_view, name="ask_question"),
 ]
 
 if settings.DEBUG:

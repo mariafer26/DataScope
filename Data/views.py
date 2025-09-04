@@ -98,10 +98,8 @@ def analyze_file_view(request, file_id):
                 df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
             except Exception:
                 df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
-        elif ext == '.xlsx':
-            df = pd.read_excel(file_path)
         else:
-            raise ValueError("Unsupported file extension")
+            df = pd.read_excel(file_path, engine='openpyxl')
 
         table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
 
@@ -168,14 +166,16 @@ def analyze_file_view(request, file_id):
             "stats": stats,
             "stats_checked": stats_checked,
             "answer": answer,
+            "result": None,   
+            "loading": False,
             "error": error,
         },
     )
 
 
-def ask_question_view(request):
+def ask_question_view(request,):
     if request.method == 'GET':
-        return redirect('upload_file')
+        return redirect('analyze_file')
 
     question = ''
     answer = None

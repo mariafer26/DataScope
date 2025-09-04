@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Answer - DataScope{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/upload.css' %}">
+<link rel="stylesheet" href="{% static 'css/result_viewer.css' %}">
+<style>
+  .results-container {
+      max-width: 1200px;
+      margin: 6rem auto 2rem;
+      padding: 3rem;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      color: #333;
+  }
+  .results-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #2D1B69;
+      margin: 1rem 0 1rem;
+      text-align: left;
+  }
+  .question-box {
+    padding: 1rem;
+    background-color: #f7f7f9;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    border: 1px solid #e1e1e8;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="results-container">
+  
+  {% if question %}
+    <h2 class="results-title">Your Question</h2>
+    <div class="question-box">
+      <p>{{ question }}</p>
+    </div>
+  {% endif %}
+
+  <h2 class="results-title">Answer</h2>
+  {% include "components/result_viewer.html" with data=answer loading=loading error=error %}
+
+</section>
+{% endblock %}

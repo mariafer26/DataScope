@@ -1,0 +1,17 @@
+# Environment variables
+.env
+
+# Django stuff
+*.log
+*.pot
+*.pyc
+__pycache__/
+db.sqlite3
+/media/
+
+# Python stuff
+*.py[cod]
+*$py.class
+
+# venv
+.venv/

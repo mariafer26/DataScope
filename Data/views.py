@@ -7,7 +7,11 @@ from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
 import os
 import pandas as pd
-
+import re
+from django.db import connection
+from . import ai_services
+from sqlalchemy import create_engine
+from django.conf import settings
 
 def home(request):
     return render(request, 'base.html')
@@ -48,6 +52,15 @@ def logout_view(request):
     logout(request)  
     return redirect("home") 
 
+def _sanitize_table_name(name):
+    # Remove the extension
+    name = os.path.splitext(name)[0]
+    # Replace invalid characters with underscores
+    name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    # Ensure it doesn't start with a number
+    if name[0].isdigit():
+        name = '_' + name
+    return name
 
 def upload_file_view(request):
     if request.method == "POST":
@@ -159,22 +172,47 @@ def analyze_file_view(request, file_id):
         },
     )
 
-def ask_question_view(request, file_id):
-    uploaded_file = UploadedFile.objects.get(id=file_id)
-    question = ""
+
+def ask_question_view(request):
+    if request.method == 'GET':
+        return redirect('upload_file')
+
+    question = ''
     answer = None
+    error = ''
+    loading = False
+    
+    if request.method == 'POST':
+        question = request.POST.get('question', '')
+        table_name = request.session.get('table_name')
 
-    if request.method == "POST":
-        question = request.POST.get("question", "")
-        if question:
-            answer = f"Placeholder answer to: '{question}' (for file {uploaded_file.name})"
+        if question and table_name:
+            try:
+                loading = True
+                if "summary" in question.lower() or "analyze" in question.lower():
+                    answer = ai_services.get_summary_from_data(table_name)
+                else:
+                    sql_query = ai_services.get_sql_from_question(question, table_name)
+                    with connection.cursor() as cursor:
+                        cursor.execute(sql_query)
+                        columns = [col[0] for col in cursor.description]
+                        answer = [
+                            dict(zip(columns, row))
+                            for row in cursor.fetchall()
+                        ]
 
-    return render(
-        request,
-        "analyze.html",
-        {
-            "uploaded_file": uploaded_file,
-            "question": question,
-            "answer": answer,
-        },
-    )
+            except Exception as e:
+                error = f"Error executing query: {str(e)}"
+                messages.error(request, error)
+            finally:
+                loading = False
+        elif not table_name:
+            error = "Please upload a file first."
+            messages.error(request, error)
+
+    return render(request, 'answer.html', {
+        'question': question,
+        'answer': answer,
+        'error': error,
+        'loading': loading,
+    })

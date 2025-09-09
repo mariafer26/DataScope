@@ -25,6 +25,13 @@ body {
     font-size: 20px;
     font-weight: bold;
     margin-bottom: 40px;
+    gap: 10px;
+}
+
+.logo img {
+    height: 40px;
+    width: auto;
+    border-radius: 8px;
 }
 
 .sidebar nav a {
@@ -73,11 +80,13 @@ body {
     align-items: center;
 }
 
+/* Oculta el input nativo */
 .upload-box input[type="file"] {
-    margin-bottom: 20px;
+    display: none;
 }
 
-.submit-btn {
+/* Botón personalizado para seleccionar archivos */
+.upload-btn {
     background-color: #8c4ea0;
     color: white;
     padding: 10px 20px;
@@ -85,10 +94,47 @@ body {
     border-radius: 25px;
     cursor: pointer;
     font-weight: bold;
+    margin-bottom: 10px;
+    display: inline-block;
+    transition: background 0.3s;
+    text-align: center;
+}
+
+.upload-btn:hover {
+    background-color: #793f8a;
+}
+
+/* Mensaje de archivo */
+.file-message {
+    color: #2D1B69;
+    font-size: 0.95rem;
+    margin-bottom: 20px;
+    min-height: 1.2em;
+}
+
+.upload-box input[type="file"] {
+    margin-bottom: 20px;
+}
+
+/* El label de seleccionar archivo usa el mismo estilo que submit-btn */
+.submit-btn {
+    padding: 0.8rem 2rem;
+    background: linear-gradient(135deg, #8B45C7, #A855C7);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 69, 199, 0.3);
+    align-self: center;
+    text-align: center;
+    display: block;
 }
 
 .submit-btn:hover {
-    background-color: #793f8a;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 69, 199, 0.4);
 }
 
 .table-responsive {
@@ -135,7 +181,7 @@ body {
     font-weight: 700;
 }
 .stat-list li { 
-    margin: .25rem 0; 
+    margin: .25rem 0;
 }
 .preview-metrics {
   display: grid;

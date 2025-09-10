@@ -248,7 +248,7 @@ Analyze Data - DataScope
       Use natural language to ask a question about your data 🚀
     </p>
     <div class="upload-box">
-      <form method="POST" action="{% url 'ask_question' %}">
+      <form method="POST" action="{% url 'ask_question' uploaded_file.id %}">
         {% csrf_token %}
         <div class="field">
           <label for="question">Your question</label>

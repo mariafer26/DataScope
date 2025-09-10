@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
-import io
+#  import io UNUSED
 
 
 class StatsTests(TestCase):

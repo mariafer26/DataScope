@@ -16,7 +16,6 @@ from django.utils import translation
 from django.contrib.auth.decorators import login_required
 
 
-
 def home(request):
     return render(request, "base.html")
 
@@ -83,7 +82,7 @@ def upload_file_view(request):
             uploaded_file.save()
 
             messages.success(request, "File uploaded successfully!")
-            return redirect("analyze_file", file_id=uploaded_file.id) 
+            return redirect("analyze_file", file_id=uploaded_file.id)
         else:
             messages.error(request, "There was a problem with the file.")
     else:

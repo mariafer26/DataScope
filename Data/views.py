@@ -10,7 +10,7 @@ import pandas as pd
 import re
 from django.db import connection
 from . import ai_services
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from django.conf import settings
 
 def home(request):
@@ -185,11 +185,30 @@ def ask_question_view(request, file_id):
 
     if request.method == "POST":
         question = request.POST.get("question", "")
-        table_name = _sanitize_table_name(uploaded_file.name)  # usar el mismo nombre en DB
-
+        table_name = _sanitize_table_name(uploaded_file.name)
+        
         if question and table_name:
             try:
                 loading = True
+                
+                # Create a database engine
+                db_path = settings.DATABASES['default']['NAME']
+                engine = create_engine(f'sqlite:///{db_path}')
+
+                # Load data into a DataFrame
+                file_path = uploaded_file.file.path
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext == '.csv':
+                    try:
+                        df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
+                    except Exception:
+                        df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
+                else:
+                    df = pd.read_excel(file_path, engine='openpyxl')
+
+                # Save DataFrame to a temporary table
+                df.to_sql(table_name, engine, if_exists='replace', index=False)
+
                 if "summary" in question.lower() or "analyze" in question.lower():
                     answer = ai_services.get_summary_from_data(table_name)
                 else:
@@ -198,11 +217,17 @@ def ask_question_view(request, file_id):
                         cursor.execute(sql_query)
                         columns = [col[0] for col in cursor.description]
                         answer = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
             except Exception as e:
                 error = f"Error executing query: {str(e)}"
                 messages.error(request, error)
             finally:
                 loading = False
+                # Drop the temporary table
+                if 'engine' in locals() and table_name:
+                    with engine.connect() as conn:
+                        conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
+                        conn.commit()
         else:
             error = "Please provide a valid question."
             messages.error(request, error)

@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .forms import UploadFileForm
 from .models import UploadedFile
@@ -175,18 +175,17 @@ def analyze_file_view(request, file_id):
     )
 
 
-def ask_question_view(request,):
-    if request.method == 'GET':
-        return redirect('analyze_file')
+def ask_question_view(request, file_id):
+    uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
 
-    question = ''
+    question = ""
     answer = None
-    error = ''
+    error = ""
     loading = False
-    
-    if request.method == 'POST':
-        question = request.POST.get('question', '')
-        table_name = request.session.get('table_name')
+
+    if request.method == "POST":
+        question = request.POST.get("question", "")
+        table_name = _sanitize_table_name(uploaded_file.name)  # usar el mismo nombre en DB
 
         if question and table_name:
             try:
@@ -198,23 +197,24 @@ def ask_question_view(request,):
                     with connection.cursor() as cursor:
                         cursor.execute(sql_query)
                         columns = [col[0] for col in cursor.description]
-                        answer = [
-                            dict(zip(columns, row))
-                            for row in cursor.fetchall()
-                        ]
-
+                        answer = [dict(zip(columns, row)) for row in cursor.fetchall()]
             except Exception as e:
                 error = f"Error executing query: {str(e)}"
                 messages.error(request, error)
             finally:
                 loading = False
-        elif not table_name:
-            error = "Please upload a file first."
+        else:
+            error = "Please provide a valid question."
             messages.error(request, error)
 
-    return render(request, 'answer.html', {
-        'question': question,
-        'answer': answer,
-        'error': error,
-        'loading': loading,
-    })
+    return render(
+        request,
+        "answer.html",
+        {
+            "uploaded_file": uploaded_file,
+            "question": question,
+            "answer": answer,
+            "error": error,
+            "loading": loading,
+        },
+    )

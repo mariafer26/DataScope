@@ -24,20 +24,26 @@ class UploadFileForm(forms.ModelForm):
 
         try:
             if ext == ".csv":
-                df = pd.read_csv(uploaded_file, nrows=50)  # leo unas filas para validar
+                df = pd.read_csv(uploaded_file, nrows=50)
             else:
                 df = pd.read_excel(uploaded_file, engine="openpyxl", nrows=50)
         except Exception as e:
-            raise forms.ValidationError(f"File could not be read as a table: {str(e)}")
+            raise forms.ValidationError(
+                f"File could not be read as a table: {str(e)}"
+            )
 
         if df.empty:
             raise forms.ValidationError("Uploaded file is empty.")
 
         if df.shape[1] < 2:
-            raise forms.ValidationError("Uploaded file must have at least 2 columns.")
+            raise forms.ValidationError(
+                "Uploaded file must have at least 2 columns."
+            )
 
         if df.shape[0] < 2:
-            raise forms.ValidationError("Uploaded file must have at least 2 rows.")
+            raise forms.ValidationError(
+                "Uploaded file must have at least 2 rows."
+            )
 
         for col in df.columns:
             if len(str(col)) > 15:

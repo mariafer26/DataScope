@@ -204,7 +204,7 @@ Analyze Data - DataScope
 {% endif %}
 
 <section class="content">
-    <h1 style="color:#2d1b69; padding-top:2rem">Resultados de {{ uploaded_file.name }}</h1>
+    <h1 style="color:#2d1b69; padding-top:2rem">Results of {{ uploaded_file.name }}</h1>
   {% if table_html or stats_checked %}
   <section class="results-container">
     
@@ -245,7 +245,7 @@ Analyze Data - DataScope
   <section class="upload-container">
     <h1>Ask a question</h1>
     <p style="margin-bottom: 2rem; color: #666; text-align: center">
-      Use natural language to ask a question about your data 🚀
+      Use natural language to ask a question about your data
     </p>
     <div class="upload-box">
       <form method="POST" action="{% url 'ask_question' uploaded_file.id %}">
@@ -272,12 +272,12 @@ Analyze Data - DataScope
   <!-- Respuestas -->
   {% if answer %}
   <section class="results-container">
-    <h2 class="results-title">Respuesta</h2>
+    <h2 class="results-title">Answer</h2>
     {% include "components/result_viewer.html" with data=answer loading=loading error=error %}
   </section>
   {% elif result %}
   <section class="results-container">
-    <h2 class="results-title">Respuesta</h2>
+    <h2 class="results-title">Answer</h2>
     {% include "components/result_viewer.html" with data=result loading=loading error=error %}
   </section>
   {% endif %}

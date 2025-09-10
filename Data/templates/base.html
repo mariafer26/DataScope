@@ -440,17 +440,17 @@
             <a href="{% url 'home' %}" class="logo">DataScope</a>
             <nav>
                 <ul class="nav-links">
-                    <li><a href="{% url 'home' %}">Inicio</a></li>
+                    {% if request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}
+                    <li><a href="{% url 'home' %}">Home</a></li>
                     {% if request.resolver_match.url_name == 'home' %}
-                    <li><a href="#features">Características</a></li>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#funcionalities">Functionalities</a></li>
+                    {% else %}
                     {% if user.is_authenticated %}
-                    <li><a href="#funcionalities">Funcionalidades</a></li>
+                    <li><a href="{% url 'upload_file' %}">Upload file</a></li>
+                    <li><a href="{% url 'dashboard' %}">View upload files</a></li>
+                    {% else %}
                     {% endif %}
-                    {% else %}
-                    {% if user.is_authenticated %}
-                    <li><a href="{% url 'upload_file' %}">Subir archivo</a></li>
-                    <li><a href="#">Analisis inteligente</a></li>
-                    {% else %}
                     {% endif %}
                     {% endif %}
                 </ul>
@@ -458,13 +458,13 @@
             <div class="auth-buttons">
             {% if user.is_authenticated %}
                 <div class="user-info">
-                    <span class="nav-text">Bienvenido, {{ user.username }}</span>
-                    <a href="#" class="btn-login">Dashboard</a>
-                    <a href="{% url 'logout' %}" class="btn-register">Cerrar sesión</a>
+                    <span class="nav-text">Welcome, {{ user.username }}</span>
+                    <a href="{% url 'dashboard' %}" class="btn-login">Dashboard</a>
+                    <a href="{% url 'logout' %}" class="btn-register">Log Out</a>
                 </div>
             {% else %}
-                <a href="{% url 'login' %}" class="btn-login">Iniciar Sesión</a>
-                <a href="{% url 'register' %}" class="btn-register">Registrarse</a>
+                <a href="{% url 'login' %}" class="btn-login">Log In</a>
+                <a href="{% url 'register' %}" class="btn-register">Sign Up</a>
             {% endif %}
             </div>
         </div>
@@ -479,9 +479,7 @@
                 <div class="hero-text">
                     <h1 class="hero-title">Data<br>Scope</h1>
                     <p class="hero-subtitle">Your data, smarter</p>
-                    <p style="opacity: 0.8; margin-bottom: 2rem;">Transforma tus datos en insights poderosos con nuestra plataforma de análisis inteligente.</p>
-                    
-
+                    <p style="opacity: 0.8; margin-bottom: 2rem;">Transform your data into powerful insights with our intelligent analysis platform.</p>
                 </div>
                 
                 <div class="hero-visual">
@@ -490,21 +488,21 @@
                             <div class="card-icon">📊</div>
                             <div class="card-content">
                                 <h3 class="card-title">Analytics</h3>
-                                <p class="card-description">Visualiza tus datos con gráficos interactivos y dashboards personalizables</p>
+                                <p class="card-description">Visualize your data with interactive charts and customizable dashboards</p>
                             </div>
                         </div>
                         <div class="floating-card">
                             <div class="card-icon">🤖</div>
                             <div class="card-content">
                                 <h3 class="card-title">AI Insights</h3>
-                                <p class="card-description">Descubre patrones ocultos con inteligencia artificial</p>
+                                <p class="card-description">Discover hidden patterns with artificial intelligence</p>
                             </div>
                         </div>
                         <div class="floating-card">
                             <div class="card-icon">⚡</div>
                             <div class="card-content">
                                 <h3 class="card-title">Real-time</h3>
-                                <p class="card-description">Datos actualizados en tiempo real</p>
+                                <p class="card-description">Data updated in real time</p>
                             </div>
                         </div>
                     </div>
@@ -514,38 +512,59 @@
 
         <!-- Features Section -->
         <section id="features" class="features">
-            <h2 class="section-title">Características Principales</h2>
+            <h2 class="section-title">Main Features</h2>
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
-                    <h3 class="feature-title">Análisis Avanzado</h3>
-                    <p class="feature-description">Herramientas de análisis potentes para extraer insights valiosos de tus datos.</p>
+                    <h3 class="feature-title">Advanced Analysis</h3>
+                    <p class="feature-description">Powerful analysis tools to extract valuable insights from your data.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
-                    <h3 class="feature-title">Integración Fácil</h3>
-                    <p class="feature-description">Conecta todas tus fuentes de datos en una sola plataforma unificada.</p>
+                    <h3 class="feature-title">Easy Integration</h3>
+                    <p class="feature-description">Connect all your data sources into one unified platform.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🛡️</div>
-                    <h3 class="feature-title">Seguridad Total</h3>
-                    <p class="feature-description">Protección de nivel empresarial para mantener tus datos seguros.</p>
+                    <h3 class="feature-title">Total Security</h3>
+                    <p class="feature-description">Enterprise-level protection to keep your data safe.</p>
                 </div>
             </div>
         </section>
+
+        
         {% if user.is_authenticated %}
         <section id="funcionalities" class="features">
-            <h2 class="section-title">Funcionalidades Principales</h2>
+            <h2 class="section-title">Main Functionalities</h2>
             <div class="features-grid">
                 <a href="{% url 'upload_file' %}">
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
-                    <h3 class="feature-title">Sube tus archivos</h3>
+                    <h3 class="feature-title">Upload your files</h3>
                 </div>
                 </a>
+                <a href="{% url 'dashboard' %}">
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
-                    <h3 class="feature-title">Análisis inteligentes</h3>
+                    <h3 class="feature-title">View and analyze your files</h3>
+                </div>
+                </a>
+            </div>
+        </section>
+        {% else %}
+        <section id="funcionalities" class="features">
+            <h2 class="section-title">Main Functionalities</h2>
+            <div class="features-grid">
+                <a href="{% url 'login' %}">
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3 class="feature-title">Upload your files</h3>
+                </div>
+                </a>
+                <a href="{% url 'login' %}">
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <h3 class="feature-title">View and analyze your files</h3>
                 </div>
                 </a>
             </div>
@@ -559,32 +578,31 @@
         <div class="footer-content">
             <div class="footer-section">
                 <h3>DataScope</h3>
-                <p>Transformando datos en decisiones inteligentes.</p>
+                <p>Turning data into smart decisions.</p>
             </div>
             <div class="footer-section">
-                <h3>Producto</h3>
-                <a href="#features">Características</a>
-                <a href="#pricing">Precios</a>
-                <a href="#docs">Documentación</a>
+                <h3>Product</h3>
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#docs">Documentation</a>
             </div>
             <div class="footer-section">
-                <h3>Empresa</h3>
-                <a href="#about">Acerca de</a>
-                <a href="#careers">Carreras</a>
-                <a href="#contact">Contacto</a>
+                <h3>Company</h3>
+                <a href="#about">About</a>
+                <a href="#careers">Careers</a>
+                <a href="#contact">Contact</a>
             </div>
             <div class="footer-section">
-                <h3>Soporte</h3>
-                <a href="#help">Centro de Ayuda</a>
-                <a href="#community">Comunidad</a>
-                <a href="#status">Estado del Sistema</a>
+                <h3>Support</h3>
+                <a href="#help">Help Center</a>
+                <a href="#community">Community</a>
+                <a href="#status">System Status</a>
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2024 DataScope. Todos los derechos reservados.</p>
+            <p>&copy; 2024 DataScope. All rights reserved.</p>
         </div>
     </footer>
-
     {% block extra_js %}{% endblock %}
 
     <script>

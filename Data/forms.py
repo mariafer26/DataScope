@@ -3,19 +3,24 @@ from .models import UploadedFile
 import os
 import pandas as pd
 
+
 class UploadFileForm(forms.ModelForm):
     class Meta:
         model = UploadedFile
-        fields = ['file']
+        fields = ["file"]
 
     def clean_file(self):
-        uploaded_file = self.cleaned_data.get('file')
+        uploaded_file = self.cleaned_data.get("file")
         if not uploaded_file:
-            raise forms.ValidationError("No file was selected. Please choose a file to upload.")
-        
+            raise forms.ValidationError(
+                "No file was selected. Please choose a file to upload."
+            )
+
         ext = os.path.splitext(uploaded_file.name)[1].lower()
         if ext not in [".csv", ".xls", ".xlsx"]:
-            raise forms.ValidationError("Unsupported file type. Please upload a CSV or Excel file.")
+            raise forms.ValidationError(
+                "Unsupported file type. Please upload a CSV or Excel file."
+            )
 
         try:
             if ext == ".csv":
@@ -36,6 +41,8 @@ class UploadFileForm(forms.ModelForm):
 
         for col in df.columns:
             if len(str(col)) > 15:
-                raise forms.ValidationError("Column names look invalid (too long or unreadable).")
+                raise forms.ValidationError(
+                    "Column names look invalid (too long or unreadable)."
+                )
 
         return uploaded_file

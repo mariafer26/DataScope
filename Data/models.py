@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.conf import settings
 
+
 class Query(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     query_text = models.TextField()
@@ -11,11 +12,10 @@ class Query(models.Model):
     def __str__(self):
         return f"Query by {self.user.username} at {self.timestamp}"
 
+
 class UploadedFile(models.Model):
     user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE,
-        related_name="uploaded_files"
+        User, on_delete=models.CASCADE, related_name="uploaded_files"
     )
     name = models.CharField(max_length=255)
     file = models.FileField(upload_to="uploads/", null=True, blank=True)

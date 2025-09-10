@@ -6,6 +6,7 @@ from django.db import connection
 # Make sure to set the GOOGLE_API_KEY environment variable
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
+
 def get_sql_from_question(question: str, table_name: str) -> str:
     """
     Generates an SQL query from a natural language question using Google's Generative AI.
@@ -17,7 +18,7 @@ def get_sql_from_question(question: str, table_name: str) -> str:
     Returns:
         The generated SQL query.
     """
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     # Get the table schema
     with connection.cursor() as cursor:
@@ -47,6 +48,7 @@ def get_sql_from_question(question: str, table_name: str) -> str:
 
     return sql_query
 
+
 def get_summary_from_data(table_name: str) -> str:
     """
     Generates a summary of the data in the specified table.
@@ -57,7 +59,7 @@ def get_summary_from_data(table_name: str) -> str:
     Returns:
         The generated summary.
     """
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     # Get the table schema
     with connection.cursor() as cursor:

@@ -13,22 +13,22 @@ from . import ai_services
 from sqlalchemy import create_engine, text
 from django.conf import settings
 
+
 def home(request):
-    return render(request, 'base.html')
+    return render(request, "base.html")
 
 
 def login_view(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
+            username = form.cleaned_data.get("username")
+            password = form.cleaned_data.get("password")
             user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
                 messages.success(request, f"¡Bienvenido, {username}!")
-                return redirect('/upload/')
- 
+                return redirect("/upload/")
 
             else:
                 messages.error(request, "Usuario o contraseña inválidos.")
@@ -37,32 +37,35 @@ def login_view(request):
     else:
         form = AuthenticationForm()
 
-    return render(request, 'login.html', {'form': form})
+    return render(request, "login.html", {"form": form})
 
 
 def register_view(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('login')
+            return redirect("login")
     else:
         form = CustomUserCreationForm()
-    return render(request, 'register.html', {'form': form})
+    return render(request, "register.html", {"form": form})
+
 
 def logout_view(request):
-    logout(request)  
-    return redirect("home") 
+    logout(request)
+    return redirect("home")
+
 
 def _sanitize_table_name(name):
     # Remove the extension
     name = os.path.splitext(name)[0]
     # Replace invalid characters with underscores
-    name = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
     # Ensure it doesn't start with a number
     if name[0].isdigit():
-        name = '_' + name
+        name = "_" + name
     return name
+
 
 def upload_file_view(request):
     if request.method == "POST":
@@ -74,7 +77,7 @@ def upload_file_view(request):
             uploaded_file.save()
 
             messages.success(request, "File uploaded successfully!")
-            return redirect("analyze_file", file_id=uploaded_file.id)  
+            return redirect("analyze_file", file_id=uploaded_file.id)
         else:
             messages.error(request, "There was a problem with the file.")
     else:
@@ -95,13 +98,17 @@ def analyze_file_view(request, file_id):
     stats_checked = False
 
     try:
-        if ext == '.csv':
+        if ext == ".csv":
             try:
-                df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
+                df = pd.read_csv(
+                    file_path, encoding="utf-8-sig", sep=None, engine="python"
+                )
             except Exception:
-                df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
+                df = pd.read_csv(
+                    file_path, encoding="latin-1", sep=None, engine="python"
+                )
         else:
-            df = pd.read_excel(file_path, engine='openpyxl')
+            df = pd.read_excel(file_path, engine="openpyxl")
 
         table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
 
@@ -110,10 +117,13 @@ def analyze_file_view(request, file_id):
 
         if numeric_df.empty:
             df_coerced = df.copy()
+
             def _coerce_to_numeric(series: pd.Series) -> pd.Series:
-                t = series.astype(str).str.replace(r'\s|\u00A0', '', regex=True)
+                t = series.astype(str).str.replace(r"\s|\u00A0", "", regex=True)
                 num1 = pd.to_numeric(t, errors="coerce")
-                t_alt = t.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                t_alt = t.str.replace(".", "", regex=False).str.replace(
+                    ",", ".", regex=False
+                )
                 num2 = pd.to_numeric(t_alt, errors="coerce")
                 return num2 if num2.notna().sum() > num1.notna().sum() else num1
 
@@ -161,14 +171,14 @@ def analyze_file_view(request, file_id):
 
     return render(
         request,
-        "analyze.html", 
+        "analyze.html",
         {
             "uploaded_file": uploaded_file,
             "table_html": table_html,
             "stats": stats,
             "stats_checked": stats_checked,
             "answer": answer,
-            "result": None,   
+            "result": None,
             "loading": False,
             "error": error,
         },
@@ -186,28 +196,32 @@ def ask_question_view(request, file_id):
     if request.method == "POST":
         question = request.POST.get("question", "")
         table_name = _sanitize_table_name(uploaded_file.name)
-        
+
         if question and table_name:
             try:
                 loading = True
-                
+
                 # Create a database engine
-                db_path = settings.DATABASES['default']['NAME']
-                engine = create_engine(f'sqlite:///{db_path}')
+                db_path = settings.DATABASES["default"]["NAME"]
+                engine = create_engine(f"sqlite:///{db_path}")
 
                 # Load data into a DataFrame
                 file_path = uploaded_file.file.path
                 ext = os.path.splitext(file_path)[1].lower()
-                if ext == '.csv':
+                if ext == ".csv":
                     try:
-                        df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
+                        df = pd.read_csv(
+                            file_path, encoding="utf-8-sig", sep=None, engine="python"
+                        )
                     except Exception:
-                        df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
+                        df = pd.read_csv(
+                            file_path, encoding="latin-1", sep=None, engine="python"
+                        )
                 else:
-                    df = pd.read_excel(file_path, engine='openpyxl')
+                    df = pd.read_excel(file_path, engine="openpyxl")
 
                 # Save DataFrame to a temporary table
-                df.to_sql(table_name, engine, if_exists='replace', index=False)
+                df.to_sql(table_name, engine, if_exists="replace", index=False)
 
                 if "summary" in question.lower() or "analyze" in question.lower():
                     answer = ai_services.get_summary_from_data(table_name)
@@ -224,7 +238,7 @@ def ask_question_view(request, file_id):
             finally:
                 loading = False
                 # Drop the temporary table
-                if 'engine' in locals() and table_name:
+                if "engine" in locals() and table_name:
                     with engine.connect() as conn:
                         conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
                         conn.commit()

@@ -12,47 +12,53 @@ from django.db import connection
 from . import ai_services
 from sqlalchemy import create_engine, text
 from django.conf import settings
+from django.utils import translation
+
 
 def home(request):
     return render(request, 'base.html')
 
 
 def login_view(request):
-    if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
-        if form.is_valid():
-            username = form.cleaned_data.get('username')
-            password = form.cleaned_data.get('password')
-            user = authenticate(username=username, password=password)
-            if user is not None:
-                login(request, user)
-                messages.success(request, f"¡Bienvenido, {username}!")
-                return redirect('/upload/')
- 
+    with translation.override('en'):
+        if request.method == 'POST':
+            form = AuthenticationForm(request, data=request.POST)
+            if form.is_valid():
+                username = form.cleaned_data.get('username')
+                password = form.cleaned_data.get('password')
+                user = authenticate(username=username, password=password)
+                if user is not None:
+                    login(request, user)
+                    messages.success(request, f"¡Bienvenido, {username}!")
+                    return redirect('home')
 
+                else:
+                    messages.error(request, "Usuario o contraseña inválidos.")
             else:
                 messages.error(request, "Usuario o contraseña inválidos.")
         else:
-            messages.error(request, "Usuario o contraseña inválidos.")
-    else:
-        form = AuthenticationForm()
+            form = AuthenticationForm()
 
-    return render(request, 'login.html', {'form': form})
+        return render(request, 'login.html', {'form': form})
 
 
 def register_view(request):
-    if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('login')
-    else:
-        form = CustomUserCreationForm()
-    return render(request, 'register.html', {'form': form})
+    with translation.override('en'):
+        if request.method == 'POST':
+            form = CustomUserCreationForm(request.POST)
+            if form.is_valid():
+                user = form.save()
+                login(request, user)
+                return redirect('home')
+        else:
+            form = CustomUserCreationForm()
+        return render(request, 'register.html', {'form': form})
+
 
 def logout_view(request):
-    logout(request)  
-    return redirect("home") 
+    logout(request)
+    return redirect("home")
+
 
 def _sanitize_table_name(name):
     # Remove the extension
@@ -64,6 +70,7 @@ def _sanitize_table_name(name):
         name = '_' + name
     return name
 
+
 def upload_file_view(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
@@ -74,7 +81,7 @@ def upload_file_view(request):
             uploaded_file.save()
 
             messages.success(request, "File uploaded successfully!")
-            return redirect("analyze_file", file_id=uploaded_file.id)  
+            return redirect("analyze_file", file_id=uploaded_file.id) 
         else:
             messages.error(request, "There was a problem with the file.")
     else:
@@ -97,19 +104,34 @@ def analyze_file_view(request, file_id):
     try:
         if ext == '.csv':
             try:
-                df = pd.read_csv(file_path, encoding='utf-8-sig', sep=None, engine='python')
+                df = pd.read_csv(
+                    file_path,
+                    encoding='utf-8-sig',
+                    sep=None,
+                    engine='python'
+                )
             except Exception:
-                df = pd.read_csv(file_path, encoding='latin-1', sep=None, engine='python')
+                df = pd.read_csv(
+                    file_path,
+                    encoding='latin-1',
+                    sep=None,
+                    engine='python'
+                )
         else:
             df = pd.read_excel(file_path, engine='openpyxl')
 
-        table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
+        table_html = df.head(20).to_html(
+            index=False,
+            classes="data-table",
+            border=0
+        )
 
         numeric_df = df.select_dtypes(include="number")
         stats_checked = True
 
         if numeric_df.empty:
             df_coerced = df.copy()
+
             def _coerce_to_numeric(series: pd.Series) -> pd.Series:
                 t = series.astype(str).str.replace(r'\s|\u00A0', '', regex=True)
                 num1 = pd.to_numeric(t, errors="coerce")

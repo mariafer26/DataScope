@@ -13,6 +13,7 @@ from . import ai_services
 from sqlalchemy import create_engine, text
 from django.conf import settings
 from django.utils import translation
+from django.contrib.auth.decorators import login_required
 
 
 def home(request):
@@ -265,3 +266,9 @@ def ask_question_view(request, file_id):
             "loading": loading,
         },
     )
+
+
+@login_required
+def dashboard_view(request):
+    files = UploadedFile.objects.filter(user=request.user)
+    return render(request, "dashboard.html", {"files": files})

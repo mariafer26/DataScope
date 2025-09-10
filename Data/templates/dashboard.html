@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}My Files - DataScope{% endblock %}
+
+{% block content %}
+<section class="features" style="padding-top: 8rem;">
+    <h2 class="section-title">My Files</h2>
+
+    {% if files %}
+    <div class="features-grid">
+        {% for file in files %}
+        <div class="feature-card">
+            <div class="feature-icon">📄</div>
+            <h3 class="feature-title">{{ file.name }}</h3>
+            <p class="feature-description">
+            </p>
+            <a href="{% url 'analyze_file' file.id %}" class="btn-login" 
+               style="display:inline-block; margin-top:1rem; text-align:center;">
+                View and Make Analysis
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+        <p style="text-align:center; margin-top:2rem; color:#666;">You haven't uploaded any files yet</p>
+    {% endif %}
+</section>
+{% endblock %}

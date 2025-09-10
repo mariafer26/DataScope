@@ -448,7 +448,7 @@
                     {% else %}
                     {% if user.is_authenticated %}
                     <li><a href="{% url 'upload_file' %}">Upload file</a></li>
-                    <li><a href="#">Smart Analysis</a></li>
+                    <li><a href="{% url 'dashboard' %}">View upload files</a></li>
                     {% else %}
                     {% endif %}
                     {% endif %}
@@ -459,8 +459,8 @@
             {% if user.is_authenticated %}
                 <div class="user-info">
                     <span class="nav-text">Welcome, {{ user.username }}</span>
-                    <a href="#" class="btn-login">Dashboard</a>
-                    <a href="{% url 'logout' %}" class="btn-register">Logout</a>
+                    <a href="{% url 'dashboard' %}" class="btn-login">Dashboard</a>
+                    <a href="{% url 'logout' %}" class="btn-register">Log Out</a>
                 </div>
             {% else %}
                 <a href="{% url 'login' %}" class="btn-login">Log In</a>
@@ -543,9 +543,10 @@
                     <h3 class="feature-title">Upload your files</h3>
                 </div>
                 </a>
+                <a href="{% url 'dashboard' %}">
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
-                    <h3 class="feature-title">Smart analysis</h3>
+                    <h3 class="feature-title">View and analyze your files</h3>
                 </div>
                 </a>
             </div>
@@ -563,7 +564,7 @@
                 <a href="{% url 'login' %}">
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
-                    <h3 class="feature-title">Smart analysis</h3>
+                    <h3 class="feature-title">View and analyze your files</h3>
                 </div>
                 </a>
             </div>

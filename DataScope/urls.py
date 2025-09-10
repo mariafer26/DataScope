@@ -18,7 +18,6 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
-from django.contrib.auth import views as auth_views
 from Data import views
 
 urlpatterns = [
@@ -30,6 +29,7 @@ urlpatterns = [
     path('upload/', views.upload_file_view, name='upload_file'),
     path('analyze/<int:file_id>/', views.analyze_file_view, name='analyze_file'),
     path("ask/<int:file_id>/", views.ask_question_view, name="ask_question"),
+    path("dashboard/", views.dashboard_view, name="dashboard"),
 ]
 
 if settings.DEBUG:

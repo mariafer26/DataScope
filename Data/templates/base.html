@@ -456,13 +456,21 @@
                 </ul>
             </nav>
             <div class="auth-buttons">
-            {% if user.is_authenticated %}
-                <div class="user-info">
-                    <span class="nav-text">Welcome, {{ user.username }}</span>
-                    <a href="{% url 'dashboard' %}" class="btn-login">Dashboard</a>
-                    <a href="{% url 'logout' %}" class="btn-register">Log Out</a>
-                </div>
-            {% else %}
+           {% if user.is_authenticated %}
+    <div class="user-info">
+        <span class="nav-text">Welcome, {{ user.username }}</span>
+        <a href="{% url 'dashboard' %}" class="btn-login">Dashboard</a>
+
+        {% if user.role == "ADMIN" %}
+            <a href="{% url 'admin_dashboard' %}" class="btn-login" style="background:#8B45C7; color:white;">
+                Admin Panel
+            </a>
+        {% endif %}
+
+        <a href="{% url 'logout' %}" class="btn-register">Log Out</a>
+    </div>
+{% else %}
+
                 <a href="{% url 'login' %}" class="btn-login">Log In</a>
                 <a href="{% url 'register' %}" class="btn-register">Sign Up</a>
             {% endif %}

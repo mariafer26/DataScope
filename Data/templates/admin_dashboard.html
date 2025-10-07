@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel - DataScope{% endblock %}
+
+{% block content %}
+<section class="features" style="padding-top: 8rem;">
+    <div style="background: linear-gradient(135deg, #8B45C7, #A855C7);
+                color: white;
+                text-align: center;
+                padding: 1.2rem;
+                border-radius: 12px;
+                margin-bottom: 2rem;
+                box-shadow: 0 4px 15px rgba(139, 69, 199, 0.3);">
+        <h2>🛡️ Administrator View</h2>
+        <p>You have full access to all uploaded files in the system.</p>
+    </div>
+
+    <h2 class="section-title">Admin Panel</h2>
+    <p style="text-align:center; margin-bottom:2rem;">
+        List of all files uploaded by users across the system.
+    </p>
+
+    {% if files %}
+    <div class="features-grid">
+        {% for file in files %}
+        <div class="feature-card">
+            <div class="feature-icon">📄</div>
+            <h3 class="feature-title">{{ file.name }}</h3>
+            <p class="feature-description">Uploaded by: {{ file.user.username }}</p>
+            <a href="{% url 'analyze_file' file.id %}" class="btn-login" 
+               style="display:inline-block; margin-top:1rem; text-align:center;">
+                View and Analyze
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+        <p style="text-align:center; margin-top:2rem; color:#666;">
+            No files have been uploaded yet.
+        </p>
+    {% endif %}
+</section>
+{% endblock %}

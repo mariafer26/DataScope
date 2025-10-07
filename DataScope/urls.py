@@ -30,6 +30,8 @@ urlpatterns = [
     path("analyze/<int:file_id>/", views.analyze_file_view, name="analyze_file"),
     path("ask/<int:file_id>/", views.ask_question_view, name="ask_question"),
     path("dashboard/", views.dashboard_view, name="dashboard"),
+    path("admin-dashboard/", views.admin_dashboard_view, name="admin_dashboard"),
+
 ]
 
 if settings.DEBUG:

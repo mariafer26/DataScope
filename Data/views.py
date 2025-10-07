@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 from django.conf import settings
 from django.utils import translation
 from django.contrib.auth.decorators import login_required
+from .decorators import admin_required 
 
 
 def home(request):
@@ -278,3 +279,10 @@ def ask_question_view(request, file_id):
 def dashboard_view(request):
     files = UploadedFile.objects.filter(user=request.user)
     return render(request, "dashboard.html", {"files": files})
+
+@login_required
+@admin_required
+def admin_dashboard_view(request):
+    """Panel exclusivo para administradores"""
+    files = UploadedFile.objects.all().order_by("-uploaded_at")
+    return render(request, "admin_dashboard.html", {"files": files})

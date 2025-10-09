@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Connections - DataScope{% endblock %}
+
+{% block content %}
+<section class="features" style="max-width:1000px;margin:7rem auto 3rem;">
+  <h2 class="section-title">Saved Connections</h2>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div style="padding:.75rem;border-radius:8px;margin:.5rem 0;background:rgba(139,69,199,.08);color:#2D1B69;">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;">
+    {% for ds in items %}
+      <div class="feature-card" style="text-align:left;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 class="feature-title" style="margin:0;">{{ ds.name }}</h3>
+          {% if ds.is_active %}
+            <span style="font-size:.8rem;color:#22c55e;">● Active</span>
+          {% endif %}
+        </div>
+        <p style="color:#666;margin:.5rem 0 0;">Engine: <strong>{{ ds.engine }}</strong></p>
+        {% if ds.engine != 'sqlite' %}
+          <p style="color:#666;margin:.25rem 0 0;">Host: {{ ds.host }}:{{ ds.port }}</p>
+          <p style="color:#666;margin:.25rem 0 0;">DB: {{ ds.db_name }}</p>
+          <p style="color:#666;margin:.25rem 0 0;">User: {{ ds.username }}</p>
+        {% else %}
+          <p style="color:#666;margin:.25rem 0 0;">Path: {{ ds.sqlite_path }}</p>
+        {% endif %}
+        <form method="post" style="margin-top:.75rem;">
+          {% csrf_token %}
+          <input type="hidden" name="activate_id" value="{{ ds.id }}">
+          {% if not ds.is_active %}
+            <button type="submit" class="btn-login">Set Active</button>
+          {% else %}
+            <button type="button" class="btn-login" disabled>Active</button>
+          {% endif %}
+        </form>
+      </div>
+    {% empty %}
+      <p>No connections saved yet. <a href="{% url 'connect_db' %}">Create one</a>.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

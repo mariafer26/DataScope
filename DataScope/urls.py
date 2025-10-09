@@ -31,7 +31,8 @@ urlpatterns = [
     path("ask/<int:file_id>/", views.ask_question_view, name="ask_question"),
     path("dashboard/", views.dashboard_view, name="dashboard"),
     path("admin-dashboard/", views.admin_dashboard_view, name="admin_dashboard"),
-
+    path("connect/", views.connect_db_view, name="connect_db"),
+    path("connections/", views.connections_list_view, name="connections_list"),
 ]
 
 if settings.DEBUG:

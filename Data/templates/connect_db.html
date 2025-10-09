@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Connect Database - DataScope{% endblock %}
+
+{% block content %}
+<section class="features" style="max-width:900px;margin:7rem auto 3rem;">
+  <h2 class="section-title">Connect an External Database</h2>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div style="padding:.75rem;border-radius:8px;margin:.5rem 0;background:rgba(139,69,199,.08);color:#2D1B69;">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" style="background:#fff;border:1px solid #eee;border-radius:16px;padding:1.5rem;">
+    {% csrf_token %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div style="grid-column:1 / -1;">
+        <label><strong>Name</strong></label>
+        {{ form.name }}
+        {{ form.name.errors }}
+      </div>
+
+      <div style="grid-column:1 / -1;">
+        <label><strong>Engine</strong></label>
+        {{ form.engine }}
+        {{ form.engine.errors }}
+      </div>
+
+      <!-- Campos comunes (Postgres/MySQL) -->
+      <div>
+        <label>Host</label>
+        {{ form.host }} {{ form.host.errors }}
+      </div>
+      <div>
+        <label>Port</label>
+        {{ form.port }} {{ form.port.errors }}
+      </div>
+      <div>
+        <label>Database</label>
+        {{ form.db_name }} {{ form.db_name.errors }}
+      </div>
+      <div>
+        <label>User</label>
+        {{ form.username }} {{ form.username.errors }}
+      </div>
+      <div>
+        <label>Password</label>
+        {{ form.password }} {{ form.password.errors }}
+      </div>
+
+      <!-- Campo SQLite -->
+      <div style="grid-column:1 / -1;">
+        <label>SQLite file path (only if engine = SQLite)</label>
+        {{ form.sqlite_path }} {{ form.sqlite_path.errors }}
+      </div>
+
+      <div style="grid-column:1 / -1; display:flex; align-items:center; gap:.5rem;">
+        {{ form.is_active }} <label>Set as active connection</label>
+        {{ form.is_active.errors }}
+      </div>
+    </div>
+
+    <button type="submit" class="btn-register" style="margin-top:1rem;">Test & Save</button>
+  </form>
+
+  <p style="margin-top:1rem;color:#666;">Tip: For SQLite use an absolute or relative path to a .db/.sqlite file.</p>
+</section>
+{% endblock %}

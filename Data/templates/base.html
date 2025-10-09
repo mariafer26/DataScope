@@ -449,6 +449,8 @@
                     {% if user.is_authenticated %}
                     <li><a href="{% url 'upload_file' %}">Upload file</a></li>
                     <li><a href="{% url 'dashboard' %}">View upload files</a></li>
+                    <li><a href="{% url 'connect_db' %}">Connect DB</a></li>
+                    <li><a href="{% url 'connections_list' %}">Connections</a></li>
                     {% else %}
                     {% endif %}
                     {% endif %}

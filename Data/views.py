@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .forms import UploadFileForm
-from .models import UploadedFile
+from .forms import UploadFileForm, DBConnectionForm
+from .models import UploadedFile, DataSource
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
@@ -10,11 +10,14 @@ import pandas as pd
 import re
 from django.db import connection
 from . import ai_services
-from sqlalchemy import create_engine, text
 from django.conf import settings
 from django.utils import translation
 from django.contrib.auth.decorators import login_required
-from .decorators import admin_required 
+from .decorators import admin_required
+from sqlalchemy.engine.url import URL
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import create_engine, text
+from django.views.decorators.http import require_http_methods
 
 
 def home(request):
@@ -286,3 +289,92 @@ def admin_dashboard_view(request):
     """Panel exclusivo para administradores"""
     files = UploadedFile.objects.all().order_by("-uploaded_at")
     return render(request, "admin_dashboard.html", {"files": files})
+
+def _build_sqlalchemy_url(ds: DataSource) -> str:
+    """
+    Construye el URL de conexión SQLAlchemy según el motor elegido.
+    """
+    if ds.engine == "postgresql":
+        # driver psycopg2
+        return str(URL.create(
+            drivername="postgresql+psycopg2",
+            username=ds.username,
+            password=ds.password,
+            host=ds.host,
+            port=int(ds.port) if ds.port else None,
+            database=ds.db_name,
+        ))
+    elif ds.engine == "mysql":
+        # driver PyMySQL
+        return str(URL.create(
+            drivername="mysql+pymysql",
+            username=ds.username,
+            password=ds.password,
+            host=ds.host,
+            port=int(ds.port) if ds.port else None,
+            database=ds.db_name,
+        ))
+    elif ds.engine == "sqlite":
+        # Para sqlite usamos ruta absoluta (o relativa) al archivo .db / .sqlite
+        path = ds.sqlite_path or ""
+        return f"sqlite:///{path}"
+    else:
+        raise ValueError("Unsupported engine")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def connect_db_view(request):
+    """
+    Muestra el formulario, valida la conexión con SELECT 1,
+    y guarda la configuración si todo OK.
+    """
+    if request.method == "POST":
+        form = DBConnectionForm(request.POST)
+        if form.is_valid():
+            ds: DataSource = form.save(commit=False)
+            ds.user = request.user
+
+            # Si se marca como activa, desactiva las demás del usuario
+            if ds.is_active:
+                DataSource.objects.filter(user=request.user, is_active=True).update(is_active=False)
+
+            # Probar conexión
+            try:
+                # Para probar, usamos un DataSource "temporal" no guardado
+                test_url = _build_sqlalchemy_url(ds)
+                engine = create_engine(test_url)
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                # Si llegamos aquí, la conexión funciona
+                ds.save()
+                messages.success(request, "Connection successful and configuration saved.")
+                return redirect("connections_list")
+            except Exception as e:
+                messages.error(request, f"Connection failed: {e}")
+        else:
+            messages.error(request, "Please correct the errors in the form.")
+    else:
+        form = DBConnectionForm()
+
+    return render(request, "connect_db.html", {"form": form})
+
+
+@login_required
+def connections_list_view(request):
+    """
+    Lista conexiones guardadas del usuario y permite activar una.
+    """
+    if request.method == "POST":
+        # Activar una conexión
+        ds_id = request.POST.get("activate_id")
+        if ds_id:
+            ds = get_object_or_404(DataSource, id=ds_id, user=request.user)
+            DataSource.objects.filter(user=request.user, is_active=True).update(is_active=False)
+            ds.is_active = True
+            ds.save()
+            messages.success(request, f"'{ds.name}' is now the active connection.")
+            return redirect("connections_list")
+
+    items = DataSource.objects.filter(user=request.user).order_by("-created_at")
+    return render(request, "connections_list.html", {"items": items})

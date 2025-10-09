@@ -8,3 +8,6 @@ flake8==6.1.0
 black==23.7.0
 bandit==1.7.5
 pbr
+SQLAlchemy
+psycopg2-binary
+PyMySQL

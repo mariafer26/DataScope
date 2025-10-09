@@ -1,8 +1,7 @@
 from django import forms
-from .models import UploadedFile
+from .models import UploadedFile, DataSource
 import os
 import pandas as pd
-
 
 class UploadFileForm(forms.ModelForm):
     class Meta:
@@ -34,21 +33,50 @@ class UploadFileForm(forms.ModelForm):
 
         if df.empty:
             raise forms.ValidationError("Uploaded file is empty.")
-
         if df.shape[1] < 2:
-            raise forms.ValidationError(
-                "Uploaded file must have at least 2 columns."
-            )
-
+            raise forms.ValidationError("Uploaded file must have at least 2 columns.")
         if df.shape[0] < 2:
-            raise forms.ValidationError(
-                "Uploaded file must have at least 2 rows."
-            )
+            raise forms.ValidationError("Uploaded file must have at least 2 rows.")
 
         for col in df.columns:
             if len(str(col)) > 15:
                 raise forms.ValidationError(
                     "Column names look invalid (too long or unreadable)."
                 )
-
         return uploaded_file
+
+class DBConnectionForm(forms.ModelForm):
+    class Meta:
+        model = DataSource
+        fields = [
+            "name",
+            "engine",
+            "host", "port", "db_name", "username", "password",
+            "sqlite_path",
+            "is_active",
+        ]
+        widgets = {
+            "password": forms.PasswordInput(render_value=True),
+            "is_active": forms.CheckboxInput(),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        engine = cleaned.get("engine")
+        # Validaciones por motor
+        if engine in ("postgresql", "mysql"):
+            required = ("host", "port", "db_name", "username", "password")
+            miss = [f for f in required if not cleaned.get(f)]
+            if miss:
+                raise forms.ValidationError(
+                    f"For {engine}, fields are required: {', '.join(miss)}"
+                )
+            # SQLite path must be empty for these
+            cleaned["sqlite_path"] = None
+        elif engine == "sqlite":
+            if not cleaned.get("sqlite_path"):
+                raise forms.ValidationError("For SQLite you must provide the file path.")
+            # Clean other fields
+            for f in ("host", "port", "db_name", "username", "password"):
+                cleaned[f] = None
+        return cleaned

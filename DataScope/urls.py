@@ -29,6 +29,7 @@ urlpatterns = [
     path("upload/", views.upload_file_view, name="upload_file"),
     path("analyze/<int:file_id>/", views.analyze_file_view, name="analyze_file"),
     path("ask/<int:file_id>/", views.ask_question_view, name="ask_question"),
+    path("export/pdf/", views.export_pdf_view, name="export_pdf"),
     path("dashboard/", views.dashboard_view, name="dashboard"),
     path("admin-dashboard/", views.admin_dashboard_view, name="admin_dashboard"),
     path("connect/", views.connect_db_view, name="connect_db"),

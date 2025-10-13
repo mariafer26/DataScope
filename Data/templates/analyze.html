@@ -283,4 +283,17 @@ Analyze Data - DataScope
   {% endif %}
 </section>
 
+
+{% if table_html or stats or answer or result %}
+<section class="results-container">
+  <h2 class="results-title">Export</h2>
+  <form method="post" action="{% url 'export_pdf' %}">
+    {% csrf_token %}
+    <button type="submit" class="submit-btn">Export PDF</button>
+  </form>
+</section>
+{% endif %}
+
+
+
 {% endblock %}

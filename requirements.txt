@@ -11,3 +11,4 @@ pbr
 SQLAlchemy
 psycopg2-binary
 PyMySQL
+xhtml2pdf==0.2.13

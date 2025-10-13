@@ -18,6 +18,14 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import create_engine, text
 from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+import io
+import base64
+from django.contrib.staticfiles import finders
+
 
 
 def home(request):
@@ -187,6 +195,27 @@ def analyze_file_view(request, file_id):
     except Exception as e:
         messages.error(request, f"Error processing file: {str(e)}")
         error = str(e)
+    
+        
+    try:
+        last_ctx = {
+            "file_name": uploaded_file.name or os.path.basename(file_path),
+            "generated_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
+            "table_html": table_html or "",
+            "stats": stats or {},
+        }
+
+        
+        if isinstance(answer, (list, dict)):
+            last_ctx["answer"] = answer
+        elif isinstance(answer, str):
+            last_ctx["answer_text"] = answer
+
+        request.session["last_upload_context"] = last_ctx
+    except Exception:
+        
+        request.session["last_upload_context"] = {}
+     
 
     return render(
         request,
@@ -362,6 +391,7 @@ def connect_db_view(request):
 
 @login_required
 def connections_list_view(request):
+
     """
     Lista conexiones guardadas del usuario y permite activar una.
     """
@@ -378,3 +408,52 @@ def connections_list_view(request):
 
     items = DataSource.objects.filter(user=request.user).order_by("-created_at")
     return render(request, "connections_list.html", {"items": items})
+
+def export_pdf_view(request):
+    """
+    Genera un PDF con Data preview, Basic metrics y Respuesta
+    usando el contexto guardado en sesión por analyze_file_view.
+    """
+    if request.method != "POST":
+        return HttpResponseBadRequest("Invalid method")
+
+    data = request.session.get("last_upload_context") or {}
+    if not data or (
+        not data.get("table_html")
+        and not data.get("stats")
+        and not data.get("answer")
+        and not data.get("answer_text")
+    ):
+        return HttpResponseBadRequest("No hay resultados para exportar")
+
+    # Renderizar HTML imprimible
+    template = get_template("exports/report.pdf.html")
+
+    # ---- Logo en base64 (si existe en static/img/logo.png) ----
+    logo_b64 = ""
+    try:
+        logo_path = finders.find("img/logo.png")
+        if logo_path and os.path.exists(logo_path):
+            with open(logo_path, "rb") as f:
+                logo_b64 = base64.b64encode(f.read()).decode("utf-8")
+    except Exception:
+        logo_b64 = ""
+    
+
+    html = template.render({
+        "export": data,
+        "logo_b64": logo_b64,
+    })
+
+    # Convertir a PDF en memoria
+    result = io.BytesIO()
+    pdf = pisa.CreatePDF(io.BytesIO(html.encode("utf-8")), dest=result, encoding="utf-8")
+    if pdf.err:
+        return HttpResponseBadRequest("Error generando el PDF")
+
+    # Descargar
+    filename = (data.get("file_name") or "DataScope_Report").replace('"', '')
+    response = HttpResponse(result.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+    return response
+

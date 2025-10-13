@@ -1,0 +1,127 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>DataScope – Reporte</title>
+  <style>
+    /* xhtml2pdf soporta un subconjunto de CSS. Evitar flex/grid/position fixed */
+    @page {
+      size: A4;
+      margin: 18mm 15mm;
+    }
+    body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; color: #222; }
+
+    .header { border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 6px; }
+
+    /* Encabezado con tabla (sin bordes) para alinear logo a la derecha */
+    .header-table { width: 100%; border-collapse: collapse; }
+    .header-table td { border: none; padding: 0; vertical-align: middle; }
+
+    .brand { font-size: 18px; font-weight: 700; }
+    .meta  { font-size: 11px; color: #555; margin-top: 4px; }
+
+    /* Logo grande y a la derecha */
+    .logo-cell { text-align: right; width: 140px; }
+    .logo     { height: 56px; }  /* ajustar a 64px si se quiere ver mayor  */
+
+    h2 { font-size: 15px; margin: 12px 0 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+    th, td { border: 1px solid #cfcfd4; padding: 6px; font-size: 11px; }
+    th { background: #f2edf9; }
+    .card { border: 1px solid #ddd; padding: 8px; margin: 6px 0; }
+    .mono { white-space: pre-wrap; font-family: DejaVu Sans Mono, monospace; }
+    .section { margin-top: 10px; }
+    .muted { color: #666; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+  <!-- Encabezado -->
+  <div class="header">
+    <table class="header-table">
+      <tr>
+        <td>
+          <div class="brand">DataScope — Reporte</div>
+          <div class="meta">
+            Archivo: {{ export.file_name|default:"(sin nombre)" }}<br/>
+            Generado: {{ export.generated_at }}
+          </div>
+        </td>
+        <td class="logo-cell">
+          {% if logo_b64 %}
+            <img class="logo" src="data:image/png;base64,{{ logo_b64 }}" alt="Logo">
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Data preview -->
+  {% if export.table_html %}
+    <div class="section">
+      <h2>Data preview</h2>
+      <div>
+        {{ export.table_html|safe }}
+      </div>
+      <div class="muted">Nota: vista previa limitada a las primeras filas.</div>
+    </div>
+  {% endif %}
+
+  <!-- Basic metrics -->
+  {% if export.stats %}
+    <div class="section">
+      <h2>Basic metrics</h2>
+      {% for col, m in export.stats.items %}
+        <div class="card">
+          <strong>{{ col }}</strong><br/>
+          Mean: {{ m.mean }} &nbsp;|&nbsp;
+          Median: {{ m.median }} &nbsp;|&nbsp;
+          Min: {{ m.min }} &nbsp;|&nbsp;
+          Max: {{ m.max }} &nbsp;|&nbsp;
+          Count: {{ m.count }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Respuesta (tabular o texto) -->
+  {% if export.answer %}
+    {# Si es lista de diccionarios, se arma tabla con encabezados #}
+    {% if export.answer.0 and export.answer.0.items %}
+      <div class="section">
+        <h2>Respuesta</h2>
+        <table>
+          <thead>
+            <tr>
+              {% for k, v in export.answer.0.items %}
+                <th>{{ k }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in export.answer %}
+              <tr>
+                {% for k, v in row.items %}
+                  <td>{{ v }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="section">
+        <h2>Respuesta</h2>
+        <div class="mono">{{ export.answer }}</div>
+      </div>
+    {% endif %}
+  {% elif export.answer_text %}
+    <div class="section">
+      <h2>Respuesta</h2>
+      <div class="mono">{{ export.answer_text }}</div>
+    </div>
+  {% endif %}
+
+</body>
+</html>

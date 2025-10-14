@@ -38,6 +38,10 @@
             <button type="submit" class="btn-login">Set Active</button>
           {% else %}
             <button type="button" class="btn-login" disabled>Active</button>
+             <a href="{% url 'analyze_db' ds.id %}" class="btn-login" 
+               style="display:inline-block; margin-top:1rem; text-align:center;">
+                View and Make Analysis
+            </a>
           {% endif %}
         </form>
       </div>

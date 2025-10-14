@@ -16,7 +16,7 @@ from django.contrib.auth.decorators import login_required
 from .decorators import admin_required
 from sqlalchemy.engine.url import URL
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.http import HttpResponse, HttpResponseBadRequest
@@ -237,6 +237,7 @@ def analyze_file_view(request, file_id):
             "loading": False,
             "error": error,
             "is_csv": is_csv,
+            "is_database": False,
         },
     )
 
@@ -386,7 +387,7 @@ def connect_db_view(request):
                 # Si llegamos aquí, la conexión funciona
                 ds.save()
                 messages.success(request, "Connection successful and configuration saved.")
-                return redirect("connections_list")
+                return redirect("analyze_db", db_id=ds.id)
             except Exception as e:
                 messages.error(request, f"Connection failed: {e}")
         else:
@@ -416,6 +417,124 @@ def connections_list_view(request):
 
     items = DataSource.objects.filter(user=request.user).order_by("-created_at")
     return render(request, "connections_list.html", {"items": items})
+
+
+def sanitize_dataframe(df, max_text_length=100):
+    """
+    Cleans a DataFrame before showing it in the frontend:
+      - Removes sensitive columns (passwords, tokens, etc.)
+      - Removes completely empty columns
+      - Truncates very long text values for display safety
+    """
+    df = df.dropna(axis=1, how='all')
+
+    sensitive_patterns = [
+        r"password", r"pass", r"pwd",
+        r"token", r"secret", r"auth",
+        r"apikey", r"api_key",
+        r"ssn", r"credit", r"card",
+        r"email", r"user_?id", r"login"
+    ]
+    cols_to_drop = [
+        col for col in df.columns
+        if any(re.search(pattern, col.lower()) for pattern in sensitive_patterns)
+    ]
+    if cols_to_drop:
+        df = df.drop(columns=cols_to_drop, errors="ignore")
+
+    # --- 3. Truncate long text values ---
+    for col in df.select_dtypes(include=["object", "string"]).columns:
+        df[col] = df[col].astype(str).apply(
+            lambda x: (x[:max_text_length] + "…") if len(x) > max_text_length else x
+        )
+
+    return df, cols_to_drop
+
+
+def analyze_db_view(request, db_id):
+    ds = get_object_or_404(DataSource, id=db_id, user=request.user)
+    try:
+        # Crear engine SQLAlchemy
+        db_url = _build_sqlalchemy_url(ds)
+        engine = create_engine(db_url)
+
+        # Obtener las tablas disponibles
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
+        if not tables:
+            messages.warning(request, "The database has no visible tables.")
+            return redirect("connections_list")
+
+        # Tomar la primera tabla por defecto
+        table_name = tables[0]
+        df = pd.read_sql(f"SELECT * FROM {table_name} LIMIT 50", engine)
+
+        df, hidden_cols = sanitize_dataframe(df)
+
+        # Si se ocultaron columnas, notificar sin revelar nombres
+        if hidden_cols:
+            messages.warning(
+                request,
+                f"{len(hidden_cols)} sensitive column(s) were hidden for security reasons."
+            )
+
+        # Mostrar solo las primeras 4 columnas para evitar desbordes
+        df_preview = df.iloc[:, :4]
+
+        # Convertir a HTML para mostrar
+        table_html = df_preview.head(20).to_html(
+            index=False,
+            classes="data-table",
+            border=0
+        )
+
+        # Calcular estadísticas
+        numeric_df = df.select_dtypes(include="number")
+        stats = {}
+        for col in numeric_df.columns:
+            s = numeric_df[col].dropna()
+            if not s.empty:
+                stats[col] = {
+                    "mean": round(float(s.mean()), 2),
+                    "median": round(float(s.median()), 2),
+                    "min": round(float(s.min()), 2),
+                    "max": round(float(s.max()), 2),
+                    "count": int(s.count()),
+                }
+
+        # Guardar contexto en sesión (opcional)
+        request.session["last_upload_context"] = {
+            "file_name": ds.name,
+            "generated_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
+            "table_html": table_html,
+            "stats": stats,
+        }
+
+        # Renderizar plantilla
+        return render(
+            request,
+            "analyze.html",
+            {
+                "uploaded_file": ds,
+                "table_html": table_html,
+                "stats": stats,
+                "stats_checked": True,
+                "answer": None,
+                "result": None,
+                "loading": False,
+                "error": "",
+                "is_csv": False,
+                "is_database": True,
+                "table_name": table_name,
+                "tables": tables,
+            },
+        )
+
+    except Exception as e:
+        messages.error(request, f"Error analyzing database: {str(e)}")
+        return redirect("connections_list")
+
 
 def export_pdf_view(request):
     """

@@ -441,7 +441,6 @@
             <nav>
                 <ul class="nav-links">
                     {% if request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}
-                    <li><a href="{% url 'home' %}">Home</a></li>
                     {% if request.resolver_match.url_name == 'home' %}
                     <li><a href="#features">Features</a></li>
                     <li><a href="#funcionalities">Functionalities</a></li>

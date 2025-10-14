@@ -114,16 +114,22 @@ Analyze Data - DataScope
   }
 
   .table-responsive {
-    overflow: auto;
-    max-height: 420px;
+    overflow-x: auto;           
+    overflow-y: hidden;     
+    max-width: 100%;             
     border: 1px solid #eee;
     border-radius: 12px;
+    padding-bottom: 10px;        
+    -webkit-overflow-scrolling: touch;
   }
+
   .data-table {
-    width: 100%;
+    width: max-content;       
+    min-width: 100%;              
     border-collapse: collapse;
     font-size: 0.95rem;
   }
+
   .data-table th,
   .data-table td {
     padding: 8px 12px;
@@ -134,6 +140,18 @@ Analyze Data - DataScope
     color: #2d1b69;
     position: sticky;
     top: 0;
+  }
+
+  .data-table th:nth-child(n+5),
+  .data-table td:nth-child(n+5) {
+    display: none; /* Oculta desde la columna 5 en adelante */
+  }
+
+  .data-table td {
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* Agrega los "..." */
   }
 
   .stats-grid {
@@ -279,6 +297,10 @@ Analyze Data - DataScope
         <p style="color: #1f1f1f; margin-top: 10px;">
           The file is a CSV. There are no multiple tables to view.
         </p>
+      {% elif is_database %}
+        <a href="{% url 'select_table' 'db' uploaded_file.id %}" style="text-decoration: none;">
+          <button type="button" class="submit-btn" style="color: white;">View tables</button>
+        </a>
       {% else %}
         <a href="{% url 'select_table' 'file' uploaded_file.id %}" style="text-decoration: none;">
           <button type="button" class="submit-btn" style="color: white;">View tables</button>

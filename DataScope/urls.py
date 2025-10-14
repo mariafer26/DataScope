@@ -34,6 +34,8 @@ urlpatterns = [
     path("admin-dashboard/", views.admin_dashboard_view, name="admin_dashboard"),
     path("connect/", views.connect_db_view, name="connect_db"),
     path("connections/", views.connections_list_view, name="connections_list"),
+    path("select-table/<str:source_type>/<int:source_id>/", views.select_table_view, name="select_table"),
+    path("show-table/", views.show_table_view, name="show_table"),
 ]
 
 if settings.DEBUG:

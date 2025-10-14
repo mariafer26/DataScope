@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}
+Table Preview - DataScope
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/upload.css' %}" />
+<style>
+  .results-container {
+    max-width: 1200px;
+    margin: 6rem auto 2rem;
+    padding: 3rem;
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .results-container h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #2d1b69;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .results-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2d1b69;
+    margin-bottom: 1rem;
+    text-align: left;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    border: 1px solid #818181;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    background: #fff;
+    padding: 1rem;
+  }
+
+  .table-container table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    color: #2d1b69;
+  }
+
+  .table-container th,
+  .table-container td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #555555;
+    color: #2d1b69;
+  }
+
+  .table-container th {
+    background: #d2c4e7;
+    color: #2d1b69;
+    font-weight: 700;
+    text-align: center;
+    position: sticky;
+    top: 0;
+  }
+
+  .back-btn {
+    display: inline-block;
+    margin-top: 2rem;
+    padding: 0.8rem 2rem;
+    background: linear-gradient(135deg, #8b45c7, #a855c7);
+    color: white;
+    border-radius: 30px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(139, 69, 199, 0.3);
+  }
+
+  .back-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 69, 199, 0.4);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="results-container">
+  <h1>Vista previa de tabla</h1>
+  <h2 class="results-title">{{ table_name }}</h2>
+  <div class="table-container">
+    {{ table_html|safe }}
+  </div>
+
+  <a href="javascript:history.back()" class="back-btn">Volver</a>
+</section>
+
+{% endblock %}

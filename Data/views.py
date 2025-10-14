@@ -25,6 +25,12 @@ from xhtml2pdf import pisa
 import io
 import base64
 from django.contrib.staticfiles import finders
+from .tables import (
+    get_table_names_from_source,
+    get_table_data_from_source,
+    get_table_names_from_file,
+    get_table_data_from_file
+)
 
 
 
@@ -107,7 +113,8 @@ def analyze_file_view(request, file_id):
     uploaded_file = UploadedFile.objects.get(id=file_id)
     file_path = uploaded_file.file.path
     ext = os.path.splitext(file_path)[1].lower()
-
+    
+    is_csv = ext == ".csv"
     table_html = None
     stats = {}
     answer = None
@@ -229,6 +236,7 @@ def analyze_file_view(request, file_id):
             "result": None,
             "loading": False,
             "error": error,
+            "is_csv": is_csv,
         },
     )
 
@@ -457,3 +465,36 @@ def export_pdf_view(request):
     response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
     return response
 
+
+def select_table_view(request, source_type, source_id):
+    """
+    Permite listar tablas según el tipo de origen: archivo o base de datos.
+    """
+    if source_type == "db":
+        data_source = DataSource.objects.get(pk=source_id)
+        tables = get_table_names_from_source(data_source)
+    elif source_type == "file":
+        uploaded = UploadedFile.objects.get(pk=source_id)
+        tables = get_table_names_from_file(uploaded)
+    else:
+        return render(request, "error.html", {"msg": "Tipo de fuente inválido"})
+
+    return render(request, "select_table.html", {"tables": tables, "source_id": source_id, "source_type": source_type})
+
+
+def show_table_view(request):
+    if request.method == "POST":
+        source_type = request.POST.get("source_type")
+        source_id = request.POST.get("source_id")
+        table = request.POST.get("table")
+
+        if source_type == "db":
+            data_source = DataSource.objects.get(pk=source_id)
+            df = get_table_data_from_source(data_source, table)
+        else:
+            uploaded = UploadedFile.objects.get(pk=source_id)
+            sheet_name = None if table == "(Archivo CSV único)" else table
+            df = get_table_data_from_file(uploaded, sheet_name)
+
+        html = df.head(100).to_html(classes="table table-striped", index=False)
+        return render(request, "show_table.html", {"table_html": html, "table_name": table})

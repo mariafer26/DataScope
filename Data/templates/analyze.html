@@ -264,8 +264,26 @@ Analyze Data - DataScope
             "
           />
         </div>
-        <button type="submit" class="submit-btn">Ask</button>
+        <button type="submit" class="submit-btn" style="color: white;">Ask</button>
       </form>
+    </div>
+  </section>
+
+  <!-- Vista de tablas -->
+  <section class="upload-container">
+    <h1>View tables</h1>
+    <p style="margin-bottom: 2rem; color: #666; text-align: center">
+    </p>
+    <div class="upload-box">
+      {% if is_csv %}
+        <p style="color: #1f1f1f; margin-top: 10px;">
+          The file is a CSV. There are no multiple tables to view.
+        </p>
+      {% else %}
+        <a href="{% url 'select_table' 'file' uploaded_file.id %}" style="text-decoration: none;">
+          <button type="button" class="submit-btn" style="color: white;">View tables</button>
+        </a>
+      {% endif %}
     </div>
   </section>
 

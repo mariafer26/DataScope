@@ -459,11 +459,12 @@
             <div class="auth-buttons">
            {% if user.is_authenticated %}
     <div class="user-info">
+        {% if user.role != "ADMIN" %}
         <span class="nav-text">Welcome, {{ user.username }}</span>
-        <a href="{% url 'dashboard' %}" class="btn-login">Dashboard</a>
+        {% endif %}
 
         {% if user.role == "ADMIN" %}
-            <a href="{% url 'admin_dashboard' %}" class="btn-login" style="background:#8B45C7; color:white;">
+            <a href="{% url 'admin_dashboard' %}" class="btn-login">
                 Admin Panel
             </a>
         {% endif %}
@@ -546,16 +547,22 @@
         <section id="funcionalities" class="features">
             <h2 class="section-title">Main Functionalities</h2>
             <div class="features-grid">
-                <a href="{% url 'upload_file' %}">
+                <a href="{% url 'upload_file' %}" style="text-decoration: none;">
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
                     <h3 class="feature-title">Upload your files</h3>
                 </div>
                 </a>
-                <a href="{% url 'dashboard' %}">
+                <a href="{% url 'dashboard' %}" style="text-decoration: none;">
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
                     <h3 class="feature-title">View and analyze your files</h3>
+                </div>
+                </a>
+                <a href="{% url 'connect_db' %}" style="text-decoration: none;">
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3 class="feature-title">Connect Databases</h3>
                 </div>
                 </a>
             </div>
@@ -564,16 +571,16 @@
         <section id="funcionalities" class="features">
             <h2 class="section-title">Main Functionalities</h2>
             <div class="features-grid">
-                <a href="{% url 'login' %}">
+                <a href="{% url 'login' %}" style="text-decoration: none;">
                 <div class="feature-card">
                     <div class="feature-icon">🔄</div>
                     <h3 class="feature-title">Upload your files</h3>
                 </div>
                 </a>
-                <a href="{% url 'login' %}">
+                <a href="{% url 'login' %}" style="text-decoration: none;">
                 <div class="feature-card">
                     <div class="feature-icon">📈</div>
-                    <h3 class="feature-title">View and analyze your files</h3>
+                    <h3 class="feature-title">Connect Databases</h3>
                 </div>
                 </a>
             </div>

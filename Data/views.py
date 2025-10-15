@@ -5,6 +5,7 @@ from .models import UploadedFile, DataSource
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
+import traceback
 import os
 import pandas as pd
 import re
@@ -19,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import create_engine, text, inspect
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
 import io
@@ -242,78 +243,12 @@ def analyze_file_view(request, file_id):
     )
 
 
-def ask_question_view(request, file_id):
-    uploaded_file = get_object_or_404(UploadedFile, id=file_id, user=request.user)
-
-    question = ""
-    answer = None
-    error = ""
-    loading = False
-
-    if request.method == "POST":
-        question = request.POST.get("question", "")
-        table_name = _sanitize_table_name(uploaded_file.name)
-
-        if question and table_name:
-            try:
-                loading = True
-
-                # Create a database engine
-                db_path = settings.DATABASES["default"]["NAME"]
-                engine = create_engine(f"sqlite:///{db_path}")
-
-                # Load data into a DataFrame
-                file_path = uploaded_file.file.path
-                ext = os.path.splitext(file_path)[1].lower()
-                if ext == ".csv":
-                    try:
-                        df = pd.read_csv(
-                            file_path, encoding="utf-8-sig", sep=None, engine="python"
-                        )
-                    except Exception:
-                        df = pd.read_csv(
-                            file_path, encoding="latin-1", sep=None, engine="python"
-                        )
-                else:
-                    df = pd.read_excel(file_path, engine="openpyxl")
-
-                # Save DataFrame to a temporary table
-                df.to_sql(table_name, engine, if_exists="replace", index=False)
-
-                if "summary" in question.lower() or "analyze" in question.lower():
-                    answer = ai_services.get_summary_from_data(table_name)
-                else:
-                    sql_query = ai_services.get_sql_from_question(question, table_name)
-                    with connection.cursor() as cursor:
-                        cursor.execute(sql_query)
-                        columns = [col[0] for col in cursor.description]
-                        answer = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-            except Exception as e:
-                error = f"Error executing query: {str(e)}"
-                messages.error(request, error)
-            finally:
-                loading = False
-                # Drop the temporary table
-                if "engine" in locals() and table_name:
-                    with engine.connect() as conn:
-                        conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}"'))
-                        conn.commit()
-        else:
-            error = "Please provide a valid question."
-            messages.error(request, error)
-
-    return render(
-        request,
-        "answer.html",
-        {
-            "uploaded_file": uploaded_file,
-            "question": question,
-            "answer": answer,
-            "error": error,
-            "loading": loading,
-        },
-    )
+def read_excel_tables(file_path):
+    xls = pd.ExcelFile(file_path)
+    tablas = {}
+    for sheet in xls.sheet_names:
+        tablas[sheet] = pd.read_excel(xls, sheet_name=sheet)
+    return tablas
 
 
 def ask_chat_view(request, source_type, source_id):
@@ -323,90 +258,138 @@ def ask_chat_view(request, source_type, source_id):
     source_id: id del UploadedFile o DataSource
     """
 
-    # Determinar la fuente
+    # --- Determinar fuente ---
     if source_type == "file":
         source = get_object_or_404(UploadedFile, id=source_id, user=request.user)
         source_label = f"Archivo: {source.name}"
         source_kind = "file"
-
     elif source_type == "db":
         source = get_object_or_404(DataSource, id=source_id, user=request.user)
         source_label = f"Base de datos: {source.name}"
         source_kind = "db"
-
     else:
         return HttpResponseBadRequest("Tipo de fuente inválido")
 
-    # Clave única del historial por fuente
+    # --- Historial de chat por sesión ---
     session_key = f"chat_history_{source_kind}_{source_id}"
     chat_history = request.session.get(session_key, [])
 
     if not chat_history:
         chat_history.append({
             "sender": "bot",
-            "text": f"¡Hola! Estás conectado a {source_label}. "
-                    "Puedes hacerme preguntas sobre los datos, generar resúmenes o ejecutar análisis."
+            "text": (
+                f"¡Hola! Estás conectado a {source_label}. "
+                "Puedes hacerme preguntas sobre los datos, generar resúmenes o ejecutar análisis."
+            ),
+            "is_json": False,
+            "data": []
         })
         request.session[session_key] = chat_history
 
-    # Si llega una pregunta nueva
+    # --- Procesar pregunta del usuario ---
     if request.method == "POST":
+        print("==== POST RECIBIDO ====")
         question = request.POST.get("question", "").strip()
         if question:
             chat_history.append({"sender": "user", "text": question})
+            print("Pregunta recibida:", question)
+
 
             try:
-                # --- Caso 1: archivo subido (CSV / Excel)
                 if source_kind == "file":
                     file_path = source.file.path
                     ext = os.path.splitext(file_path)[1].lower()
-                    table_name = _sanitize_table_name(source.name)
-
-                    if ext == ".csv":
-                        try:
-                            df = pd.read_csv(file_path, encoding="utf-8-sig", sep=None, engine="python")
-                        except Exception:
-                            df = pd.read_csv(file_path, encoding="latin-1", sep=None, engine="python")
-                    else:
-                        df = pd.read_excel(file_path, engine="openpyxl")
-
                     db_path = settings.DATABASES["default"]["NAME"]
                     engine = create_engine(f"sqlite:///{db_path}")
-                    df.to_sql(table_name, engine, if_exists="replace", index=False)
+                    tablas_cargadas = []
 
-                    # Obtener respuesta con el módulo de archivos
-                    if "summary" in question.lower() or "analyze" in question.lower():
-                        answer = ai_services.get_summary_from_data(table_name)
+                    if ext == ".csv":
+                        df = pd.read_csv(file_path, encoding="utf-8-sig", sep=None, engine="python")
+                        table_name = _sanitize_table_name(source.name)
+                        df.to_sql(table_name, engine, if_exists="replace", index=False)
+                        tablas_cargadas = [table_name]
+                    elif ext in [".xls", ".xlsx"]:
+                        hojas = read_excel_tables(file_path)
+                        for hoja, df in hojas.items():
+                            table_name = _sanitize_table_name(hoja)
+                            df.to_sql(table_name, engine, if_exists="replace", index=False)
+                            tablas_cargadas.append(table_name)
                     else:
-                        sql_query = ai_services.get_sql_from_question(question, table_name)
+                        raise ValueError("Formato de archivo no soportado.")
+
+                    tablas_info = ", ".join(tablas_cargadas)
+                    context_prompt = f"Tablas disponibles: {tablas_info}."
+
+                    if any(k in question.lower() for k in ["resumen", "summary", "analiza", "analyze"]):
+                        summaries = []
+                        for tabla in tablas_cargadas:
+                            s = ai_services.get_summary_from_data(tabla)
+                            summaries.append(f"**{tabla}**:\n{s}")
+                        answer = "\n\n".join(summaries)
+                    else:
+                        sql_query = ai_services.get_sql_from_question(
+                            f"{context_prompt}\n{question}", tablas_cargadas[0]
+                        )
                         with connection.cursor() as cursor:
                             cursor.execute(sql_query)
                             columns = [col[0] for col in cursor.description]
                             result = [dict(zip(columns, row)) for row in cursor.fetchall()]
                         answer = result if result else "No se encontraron resultados."
 
-                # --- Caso 2: conexión a base de datos externa
                 else:
                     answer = ai_services.get_response_from_external_db(question, source)
 
-                chat_history.append({"sender": "bot", "text": str(answer)})
+                if isinstance(answer, list) and len(answer) > 0 and isinstance(answer[0], dict):
+                    bot_msg = {
+                        "sender": "bot",
+                        "text": None,
+                        "is_json": True,
+                        "data": answer
+                    }
+                else:
+                    bot_msg = {
+                        "sender": "bot",
+                        "text": str(answer),
+                        "is_json": False,
+                        "data": []
+                    }
+
+                chat_history.append(bot_msg)
 
             except Exception as e:
-                chat_history.append({
+                bot_msg = {
                     "sender": "bot",
-                    "text": f"⚠ Error: {str(e)}"
-                })
+                    "text": f"⚠ Error: {str(e)}",
+                    "is_json": False,
+                    "data": []
+                }
+                chat_history.append(bot_msg)
 
             finally:
-                if source_kind == "file" and "engine" in locals():
+                if source_kind == "file" and "engine" in locals() and "tablas_cargadas" in locals():
                     with engine.connect() as conn:
-                        conn.execute(text(f'DROP TABLE IF EXISTS \"{table_name}\"'))
+                        for t in tablas_cargadas:
+                            conn.execute(text(f'DROP TABLE IF EXISTS "{t}"'))
                         conn.commit()
 
             request.session[session_key] = chat_history
             request.session.modified = True
+
+            print("==== DEBUG RESPUESTA ====")
+            print(bot_msg)
+            print("==== FIN DEBUG ====")
+            
+
+            # --- NUEVO: Si es una petición AJAX, devolvemos solo el último mensaje ---
+            if request.headers.get("x-requested-with", "").lower() == "xmlhttprequest":
+                return JsonResponse(bot_msg, safe=False)
+
+            # ... dentro del bloque POST, justo antes del return ...
+            
+            # Si no es AJAX
             return redirect("ask_chat", source_type=source_kind, source_id=source_id)
 
+    # --- Renderizado inicial ---
     return render(request, "chat.html", {
         "source": source,
         "source_type": source_kind,

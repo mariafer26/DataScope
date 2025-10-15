@@ -16,7 +16,7 @@ def get_sql_from_question(question: str, table_name: str) -> str:
     Generates an SQL query from a natural language question using Google's Generative AI.
     Only uses tables within the same temporary database created for the uploaded file.
     """
-    model = genai.GenerativeModel("models/gemini-pro-latest")
+    model = genai.GenerativeModel("models/gemini-2.5-pro")
 
     # Obtener todas las tablas dentro de la misma base (no las globales del sistema)
     with connection.cursor() as cursor:
@@ -51,6 +51,8 @@ def get_sql_from_question(question: str, table_name: str) -> str:
     Return only the SQL query, no explanation.
 
     Remember, it must be a valid SQL query.
+
+    If a summary is requested, you must access the data and generate the response in natural language.
     """
 
     response = model.generate_content(prompt)
@@ -109,7 +111,7 @@ def get_summary_from_data(table_name: str) -> str:
     Returns:
         The generated summary.
     """
-    model = genai.GenerativeModel("models/gemini-pro-latest")
+    model = genai.GenerativeModel("models/gemini-2.5-pro")
 
     # Get the table schema
     with connection.cursor() as cursor:

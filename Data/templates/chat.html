@@ -14,8 +14,16 @@
   border-radius: 16px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.1);
 }
+#chat-box {
+  height: 500px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+}
 .message {
-  margin: 1rem 0;
+  margin: 0.7rem 0;
   padding: 1rem;
   border-radius: 10px;
   max-width: 80%;
@@ -31,9 +39,14 @@
   background: #f2f2f2;
   color: #333;
 }
+.message.loading {
+  background: #f9f9f9;
+  color: #555;
+  font-style: italic;
+}
 form {
   display: flex;
-  margin-top: 2rem;
+  margin-top: 1rem;
 }
 form input {
   flex: 1;
@@ -50,6 +63,31 @@ form button {
   border-radius: 10px;
   cursor: pointer;
 }
+form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.data-table th {
+  background-color: #2D1B69;
+  color: white;
+  text-align: left;
+  padding: 0.6rem;
+}
+.data-table td {
+  padding: 0.6rem;
+  border-bottom: 1px solid #ddd;
+}
+.data-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
 </style>
 {% endblock %}
 
@@ -60,20 +98,25 @@ form button {
   <div id="chat-box">
     {% for msg in chat_history %}
       <div class="message {{ msg.sender }}">
-        {% if msg.sender == "bot" and msg.text.0 %}
-          {% if msg.text.0 is dict %}
-            <!-- Mostrar tabla -->
-            <table class="data-table">
-              <thead><tr>{% for k in msg.text.0.keys %}<th>{{ k }}</th>{% endfor %}</tr></thead>
-              <tbody>
-              {% for row in msg.text %}
-                <tr>{% for val in row.values %}<td>{{ val }}</td>{% endfor %}</tr>
+        {% if msg.is_json %}
+          <table class="data-table">
+            <thead>
+              <tr>
+                {% for col in msg.data.0.keys %}
+                  <th>{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in msg.data %}
+                <tr>
+                  {% for val in row.values %}
+                    <td>{{ val }}</td>
+                  {% endfor %}
+                </tr>
               {% endfor %}
-              </tbody>
-            </table>
-          {% else %}
-            <p>{{ msg.text }}</p>
-          {% endif %}
+            </tbody>
+          </table>
         {% else %}
           <p>{{ msg.text }}</p>
         {% endif %}
@@ -81,10 +124,88 @@ form button {
     {% endfor %}
   </div>
 
-  <form method="POST">
+  <form id="chat-form">
     {% csrf_token %}
-    <input type="text" name="question" placeholder="Ask a question..." autocomplete="off" required>
-    <button type="submit">Send</button>
+    <input type="text" name="question" id="question" placeholder="Ask your question..." autocomplete="off" required>
+    <button type="submit" id="send-btn">Send</button>
   </form>
 </div>
+
+<script>
+const chatBox = document.getElementById("chat-box");
+const form = document.getElementById("chat-form");
+const input = document.getElementById("question");
+const sendBtn = document.getElementById("send-btn");
+
+function scrollToBottom() {
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+
+  // Mostrar mensaje del usuario
+  const userMsg = document.createElement("div");
+  userMsg.classList.add("message", "user");
+  userMsg.innerHTML = `<p>${question}</p>`;
+  chatBox.appendChild(userMsg);
+  scrollToBottom();
+
+  input.value = "";
+  input.disabled = true;
+  sendBtn.disabled = true;
+
+  // Mostrar mensaje de "pensando..."
+  const loadingMsg = document.createElement("div");
+  loadingMsg.classList.add("message", "bot", "loading");
+  loadingMsg.innerHTML = `<p>💬 DataScope is processing your question...</p>`;
+  chatBox.appendChild(loadingMsg);
+  scrollToBottom();
+
+  try {
+    const formData = new FormData();
+    formData.append("question", question);
+    formData.append("csrfmiddlewaretoken", document.querySelector("[name=csrfmiddlewaretoken]").value);
+
+    const response = await fetch("{% url 'ask_chat' source_type=source_type source_id=source.id %}", {
+    method: "POST",
+    body: formData,
+    headers: { "X-Requested-With": "XMLHttpRequest" },
+    });
+
+
+
+    const data = await response.json();
+
+    // Reemplazar el mensaje de "pensando..." con la respuesta real
+    loadingMsg.classList.remove("loading");
+    loadingMsg.innerHTML = "";
+
+    if (data.is_json && data.data && data.data.length > 0) {
+      let table = `<table class="data-table"><thead><tr>`;
+      Object.keys(data.data[0]).forEach(col => table += `<th>${col}</th>`);
+      table += `</tr></thead><tbody>`;
+      data.data.forEach(row => {
+        table += `<tr>`;
+        Object.values(row).forEach(val => table += `<td>${val}</td>`);
+        table += `</tr>`;
+      });
+      table += `</tbody></table>`;
+      loadingMsg.innerHTML = table;
+    } else {
+      loadingMsg.innerHTML = `<p>${data.text}</p>`;
+    }
+
+  } catch (error) {
+    loadingMsg.classList.remove("loading");
+    loadingMsg.innerHTML = `<p>⚠ Error processing the question. Please try again..</p>`;
+  } finally {
+    input.disabled = false;
+    sendBtn.disabled = false;
+    scrollToBottom();
+  }
+});
+</script>
 {% endblock %}

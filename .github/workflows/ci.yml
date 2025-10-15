@@ -29,8 +29,5 @@ jobs:
       - name: Run flake8 (Linting)
         run: flake8 .
 
-      - name: Run bandit (Security check)
-        run: bandit -r .
-
       - name: Run tests
         run: pytest

@@ -110,11 +110,22 @@ def upload_file_view(request):
 
 
 def analyze_file_view(request, file_id):
+    # Obtener el archivo solicitado
     uploaded_file = UploadedFile.objects.get(id=file_id)
+
+    # Validar acceso: solo el propietario o un admin pueden analizar el archivo
+    if not request.user.is_authenticated:
+        messages.error(request, "You must be logged in to access this page.")
+        return redirect("login")
+
+    if not request.user.is_admin() and uploaded_file.user != request.user:
+        messages.error(request, "You are not allowed to access this file.")
+        return redirect("dashboard")
+
+    # Si pasa la validación, continuar con el procesamiento
     file_path = uploaded_file.file.path
     ext = os.path.splitext(file_path)[1].lower()
-    
-    is_csv = ext == ".csv"
+
     table_html = None
     stats = {}
     answer = None
@@ -202,27 +213,6 @@ def analyze_file_view(request, file_id):
     except Exception as e:
         messages.error(request, f"Error processing file: {str(e)}")
         error = str(e)
-    
-        
-    try:
-        last_ctx = {
-            "file_name": uploaded_file.name or os.path.basename(file_path),
-            "generated_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
-            "table_html": table_html or "",
-            "stats": stats or {},
-        }
-
-        
-        if isinstance(answer, (list, dict)):
-            last_ctx["answer"] = answer
-        elif isinstance(answer, str):
-            last_ctx["answer_text"] = answer
-
-        request.session["last_upload_context"] = last_ctx
-    except Exception:
-        
-        request.session["last_upload_context"] = {}
-     
 
     return render(
         request,
@@ -236,8 +226,6 @@ def analyze_file_view(request, file_id):
             "result": None,
             "loading": False,
             "error": error,
-            "is_csv": is_csv,
-            "is_database": False,
         },
     )
 

@@ -29,14 +29,20 @@ urlpatterns = [
     path("upload/", views.upload_file_view, name="upload_file"),
     path("analyze/<int:file_id>/", views.analyze_file_view, name="analyze_file"),
     path("ask/<int:file_id>/", views.ask_question_view, name="ask_question"),
-    path("ask/<str:source_type>/<int:source_id>/", views.ask_chat_view, name="ask_chat"),
+    path(
+        "ask/<str:source_type>/<int:source_id>/", views.ask_chat_view, name="ask_chat"
+    ),
     path("export/pdf/", views.export_pdf_view, name="export_pdf"),
     path("dashboard/", views.dashboard_view, name="dashboard"),
     path("admin-dashboard/", views.admin_dashboard_view, name="admin_dashboard"),
     path("connect/", views.connect_db_view, name="connect_db"),
     path("analyze-db/<int:db_id>/", views.analyze_db_view, name="analyze_db"),
     path("connections/", views.connections_list_view, name="connections_list"),
-    path("select-table/<str:source_type>/<int:source_id>/", views.select_table_view, name="select_table"),
+    path(
+        "select-table/<str:source_type>/<int:source_id>/",
+        views.select_table_view,
+        name="select_table",
+    ),
     path("show-table/", views.show_table_view, name="show_table"),
 ]
 

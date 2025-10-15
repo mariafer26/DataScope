@@ -2,19 +2,20 @@ from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 
+
 # Modelo de usuario extendido
 class CustomUser(AbstractUser):
     ROLE_CHOICES = (
-        ('ADMIN', 'Administrator'),
-        ('STANDARD', 'Standard User'),
+        ("ADMIN", "Administrator"),
+        ("STANDARD", "Standard User"),
     )
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='STANDARD')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="STANDARD")
 
     def is_admin(self):
-        return self.role == 'ADMIN'
+        return self.role == "ADMIN"
 
     def is_standard(self):
-        return self.role == 'STANDARD'
+        return self.role == "STANDARD"
 
 
 # Modelo de consultas (Query)
@@ -31,7 +32,9 @@ class Query(models.Model):
 # Modelo de archivos subidos
 class UploadedFile(models.Model):
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="uploaded_files"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="uploaded_files",
     )
     name = models.CharField(max_length=255)
     file = models.FileField(upload_to="uploads/", null=True, blank=True)
@@ -40,6 +43,7 @@ class UploadedFile(models.Model):
     def __str__(self):
         return f"{self.name} subido por {self.user.username}"
 
+
 class DataSource(models.Model):
     ENGINE_CHOICES = (
         ("postgresql", "PostgreSQL"),
@@ -47,7 +51,9 @@ class DataSource(models.Model):
         ("sqlite", "SQLite (file path)"),
     )
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="data_sources")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="data_sources"
+    )
     name = models.CharField(max_length=100, help_text="Friendly name, e.g. 'Sales DB'")
     engine = models.CharField(max_length=20, choices=ENGINE_CHOICES)
 

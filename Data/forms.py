@@ -3,6 +3,7 @@ from .models import UploadedFile, DataSource
 import os
 import pandas as pd
 
+
 class UploadFileForm(forms.ModelForm):
     class Meta:
         model = UploadedFile
@@ -27,9 +28,7 @@ class UploadFileForm(forms.ModelForm):
             else:
                 df = pd.read_excel(uploaded_file, engine="openpyxl", nrows=50)
         except Exception as e:
-            raise forms.ValidationError(
-                f"File could not be read as a table: {str(e)}"
-            )
+            raise forms.ValidationError(f"File could not be read as a table: {str(e)}")
 
         if df.empty:
             raise forms.ValidationError("Uploaded file is empty.")
@@ -45,13 +44,18 @@ class UploadFileForm(forms.ModelForm):
                 )
         return uploaded_file
 
+
 class DBConnectionForm(forms.ModelForm):
     class Meta:
         model = DataSource
         fields = [
             "name",
             "engine",
-            "host", "port", "db_name", "username", "password",
+            "host",
+            "port",
+            "db_name",
+            "username",
+            "password",
             "sqlite_path",
             "is_active",
         ]
@@ -75,7 +79,9 @@ class DBConnectionForm(forms.ModelForm):
             cleaned["sqlite_path"] = None
         elif engine == "sqlite":
             if not cleaned.get("sqlite_path"):
-                raise forms.ValidationError("For SQLite you must provide the file path.")
+                raise forms.ValidationError(
+                    "For SQLite you must provide the file path."
+                )
             # Clean other fields
             for f in ("host", "port", "db_name", "username", "password"):
                 cleaned[f] = None

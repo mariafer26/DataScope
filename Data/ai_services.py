@@ -1,5 +1,6 @@
 import google.generativeai as genai
-import os, re
+import os
+import re
 from django.db import connection
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -45,7 +46,7 @@ def get_sql_from_question(question: str, table_name: str) -> str:
     The user question is about: "{question}"
 
     Generate a valid SQLite SQL query to answer the question.
-    Prefer using the table "{table_name}" if it is relevant, 
+    Prefer using the table "{table_name}" if it is relevant,
     but you can use other tables if the question explicitly mentions them.
 
     Return only the SQL query, no explanation.
@@ -61,16 +62,24 @@ def get_sql_from_question(question: str, table_name: str) -> str:
         sql_query = sql_query.split("```sql")[1].split("```")[0].strip()
 
     # Si el modelo escribió texto antes del SELECT, limpiarlo
-    sql_query = re.sub(r"^[^\w]*(SELECT|WITH|INSERT|UPDATE|DELETE)", r"\1", sql_query, flags=re.IGNORECASE)
+    sql_query = re.sub(
+        r"^[^\w]*(SELECT|WITH|INSERT|UPDATE|DELETE)",
+        r"\1",
+        sql_query,
+        flags=re.IGNORECASE,
+    )
 
     # Quitar frases tipo "SQLite" o "Query:"
-    sql_query = re.sub(r"\b(SQLite|MySQL|PostgreSQL)\b", "", sql_query, flags=re.IGNORECASE)
+    sql_query = re.sub(
+        r"\b(SQLite|MySQL|PostgreSQL)\b", "", sql_query, flags=re.IGNORECASE
+    )
 
     # Asegurar que termina con punto y coma
     if not sql_query.strip().endswith(";"):
         sql_query += ";"
 
     return sql_query
+
 
 def get_response_from_external_db(question, data_source):
     """

@@ -259,31 +259,21 @@ Analyze Data - DataScope
   </section>
   {% endif %}
 
-  <!-- Preguntas -->
   <section class="upload-container">
-    <h1>Ask a question</h1>
+    <h1>View chat</h1>
     <p style="margin-bottom: 2rem; color: #666; text-align: center">
-      Use natural language to ask a question about your data
     </p>
     <div class="upload-box">
-      <form method="POST" action="{% url 'ask_question' uploaded_file.id %}">
-        {% csrf_token %}
-        <div class="field">
-          <label for="question">Your question</label>
-          <input
-            type="text"
-            name="question"
-            id="question"
-            style="
-              width: 100%;
-              padding: 0.5rem;
-              border-radius: 5px;
-              border: 1px solid #ccc;
-            "
-          />
-        </div>
-        <button type="submit" class="submit-btn" style="color: white;">Ask</button>
-      </form>
+      {% if is_database %}
+        <a href="{% url 'ask_chat' 'db' uploaded_file.id %}" style="text-decoration: none;">
+          <button type="button" class="submit-btn" style="color: white; text-decoration: none;">Open Chat</button>
+        </a>
+      {% else %}
+        <a href="{% url 'ask_chat' 'file' uploaded_file.id %}" style="text-decoration: none;">
+          <button type="button" class="submit-btn" style="color: white; text-decoration: none;">Open Chat</button>
+        </a>
+      {% endif %}
+      
     </div>
   </section>
 
@@ -308,21 +298,6 @@ Analyze Data - DataScope
       {% endif %}
     </div>
   </section>
-
-  <!-- Respuestas -->
-  {% if answer %}
-  <section class="results-container">
-    <h2 class="results-title">Answer</h2>
-    {% include "components/result_viewer.html" with data=answer loading=loading error=error %}
-  </section>
-  {% elif result %}
-  <section class="results-container">
-    <h2 class="results-title">Answer</h2>
-    {% include "components/result_viewer.html" with data=result loading=loading error=error %}
-  </section>
-  {% endif %}
-</section>
-
 
 {% if table_html or stats or answer or result %}
 <section class="results-container">

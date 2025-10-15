@@ -316,6 +316,105 @@ def ask_question_view(request, file_id):
     )
 
 
+def ask_chat_view(request, source_type, source_id):
+    """
+    Chat persistente que funciona tanto con archivos cargados como con conexiones externas.
+    source_type: 'file' o 'db'
+    source_id: id del UploadedFile o DataSource
+    """
+
+    # Determinar la fuente
+    if source_type == "file":
+        source = get_object_or_404(UploadedFile, id=source_id, user=request.user)
+        source_label = f"Archivo: {source.name}"
+        source_kind = "file"
+
+    elif source_type == "db":
+        source = get_object_or_404(DataSource, id=source_id, user=request.user)
+        source_label = f"Base de datos: {source.name}"
+        source_kind = "db"
+
+    else:
+        return HttpResponseBadRequest("Tipo de fuente inválido")
+
+    # Clave única del historial por fuente
+    session_key = f"chat_history_{source_kind}_{source_id}"
+    chat_history = request.session.get(session_key, [])
+
+    if not chat_history:
+        chat_history.append({
+            "sender": "bot",
+            "text": f"¡Hola! Estás conectado a {source_label}. "
+                    "Puedes hacerme preguntas sobre los datos, generar resúmenes o ejecutar análisis."
+        })
+        request.session[session_key] = chat_history
+
+    # Si llega una pregunta nueva
+    if request.method == "POST":
+        question = request.POST.get("question", "").strip()
+        if question:
+            chat_history.append({"sender": "user", "text": question})
+
+            try:
+                # --- Caso 1: archivo subido (CSV / Excel)
+                if source_kind == "file":
+                    file_path = source.file.path
+                    ext = os.path.splitext(file_path)[1].lower()
+                    table_name = _sanitize_table_name(source.name)
+
+                    if ext == ".csv":
+                        try:
+                            df = pd.read_csv(file_path, encoding="utf-8-sig", sep=None, engine="python")
+                        except Exception:
+                            df = pd.read_csv(file_path, encoding="latin-1", sep=None, engine="python")
+                    else:
+                        df = pd.read_excel(file_path, engine="openpyxl")
+
+                    db_path = settings.DATABASES["default"]["NAME"]
+                    engine = create_engine(f"sqlite:///{db_path}")
+                    df.to_sql(table_name, engine, if_exists="replace", index=False)
+
+                    # Obtener respuesta con el módulo de archivos
+                    if "summary" in question.lower() or "analyze" in question.lower():
+                        answer = ai_services.get_summary_from_data(table_name)
+                    else:
+                        sql_query = ai_services.get_sql_from_question(question, table_name)
+                        with connection.cursor() as cursor:
+                            cursor.execute(sql_query)
+                            columns = [col[0] for col in cursor.description]
+                            result = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                        answer = result if result else "No se encontraron resultados."
+
+                # --- Caso 2: conexión a base de datos externa
+                else:
+                    answer = ai_services.get_response_from_external_db(question, source)
+
+                chat_history.append({"sender": "bot", "text": str(answer)})
+
+            except Exception as e:
+                chat_history.append({
+                    "sender": "bot",
+                    "text": f"⚠ Error: {str(e)}"
+                })
+
+            finally:
+                if source_kind == "file" and "engine" in locals():
+                    with engine.connect() as conn:
+                        conn.execute(text(f'DROP TABLE IF EXISTS \"{table_name}\"'))
+                        conn.commit()
+
+            request.session[session_key] = chat_history
+            request.session.modified = True
+            return redirect("ask_chat", source_type=source_kind, source_id=source_id)
+
+    return render(request, "chat.html", {
+        "source": source,
+        "source_type": source_kind,
+        "chat_history": chat_history,
+    })
+
+
+
 @login_required
 def dashboard_view(request):
     files = UploadedFile.objects.filter(user=request.user)

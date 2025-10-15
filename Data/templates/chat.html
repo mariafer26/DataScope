@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Chat - DataScope{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/upload.css' %}">
+<style>
+.chat-container {
+  max-width: 900px;
+  margin: 6rem auto;
+  background: #fff;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+.message {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 10px;
+  max-width: 80%;
+  word-wrap: break-word;
+}
+.message.user {
+  background: #2D1B69;
+  color: #fff;
+  margin-left: auto;
+  text-align: right;
+}
+.message.bot {
+  background: #f2f2f2;
+  color: #333;
+}
+form {
+  display: flex;
+  margin-top: 2rem;
+}
+form input {
+  flex: 1;
+  padding: 0.7rem;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+}
+form button {
+  margin-left: 1rem;
+  padding: 0.7rem 1.5rem;
+  background: #2D1B69;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+  <h2 style="color:#2D1B69;">Chat with DataScope</h2>
+
+  <div id="chat-box">
+    {% for msg in chat_history %}
+      <div class="message {{ msg.sender }}">
+        {% if msg.sender == "bot" and msg.text.0 %}
+          {% if msg.text.0 is dict %}
+            <!-- Mostrar tabla -->
+            <table class="data-table">
+              <thead><tr>{% for k in msg.text.0.keys %}<th>{{ k }}</th>{% endfor %}</tr></thead>
+              <tbody>
+              {% for row in msg.text %}
+                <tr>{% for val in row.values %}<td>{{ val }}</td>{% endfor %}</tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p>{{ msg.text }}</p>
+          {% endif %}
+        {% else %}
+          <p>{{ msg.text }}</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <form method="POST">
+    {% csrf_token %}
+    <input type="text" name="question" placeholder="Ask a question..." autocomplete="off" required>
+    <button type="submit">Send</button>
+  </form>
+</div>
+{% endblock %}

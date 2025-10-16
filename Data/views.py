@@ -16,7 +16,6 @@ from django.utils import translation
 from django.contrib.auth.decorators import login_required
 from .decorators import admin_required
 from sqlalchemy.engine.url import URL
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import create_engine, text, inspect
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
@@ -30,9 +29,8 @@ from .tables import (
     get_table_names_from_source,
     get_table_data_from_source,
     get_table_names_from_file,
-    get_table_data_from_file
+    get_table_data_from_file,
 )
-
 
 
 def home(request):
@@ -40,17 +38,17 @@ def home(request):
 
 
 def login_view(request):
-    with translation.override('en'):
-        if request.method == 'POST':
+    with translation.override("en"):
+        if request.method == "POST":
             form = AuthenticationForm(request, data=request.POST)
             if form.is_valid():
-                username = form.cleaned_data.get('username')
-                password = form.cleaned_data.get('password')
+                username = form.cleaned_data.get("username")
+                password = form.cleaned_data.get("password")
                 user = authenticate(username=username, password=password)
                 if user is not None:
                     login(request, user)
                     messages.success(request, f"¡Bienvenido, {username}!")
-                    return redirect('home')
+                    return redirect("home")
 
                 else:
                     messages.error(request, "Usuario o contraseña inválidos.")
@@ -59,20 +57,20 @@ def login_view(request):
         else:
             form = AuthenticationForm()
 
-        return render(request, 'login.html', {'form': form})
+        return render(request, "login.html", {"form": form})
 
 
 def register_view(request):
-    with translation.override('en'):
-        if request.method == 'POST':
+    with translation.override("en"):
+        if request.method == "POST":
             form = CustomUserCreationForm(request.POST)
             if form.is_valid():
                 user = form.save()
                 login(request, user)
-                return redirect('home')
+                return redirect("home")
         else:
             form = CustomUserCreationForm()
-        return render(request, 'register.html', {'form': form})
+        return render(request, "register.html", {"form": form})
 
 
 def logout_view(request):
@@ -111,11 +109,22 @@ def upload_file_view(request):
 
 
 def analyze_file_view(request, file_id):
+    # Obtener el archivo solicitado
     uploaded_file = UploadedFile.objects.get(id=file_id)
+
+    # Validar acceso: solo el propietario o un admin pueden analizar el archivo
+    if not request.user.is_authenticated:
+        messages.error(request, "You must be logged in to access this page.")
+        return redirect("login")
+
+    if not request.user.is_admin() and uploaded_file.user != request.user:
+        messages.error(request, "You are not allowed to access this file.")
+        return redirect("dashboard")
+
+    # Si pasa la validación, continuar con el procesamiento
     file_path = uploaded_file.file.path
     ext = os.path.splitext(file_path)[1].lower()
-    
-    is_csv = ext == ".csv"
+
     table_html = None
     stats = {}
     answer = None
@@ -126,26 +135,16 @@ def analyze_file_view(request, file_id):
         if ext == ".csv":
             try:
                 df = pd.read_csv(
-                    file_path,
-                    encoding='utf-8-sig',
-                    sep=None,
-                    engine='python'
+                    file_path, encoding="utf-8-sig", sep=None, engine="python"
                 )
             except Exception:
                 df = pd.read_csv(
-                    file_path,
-                    encoding='latin-1',
-                    sep=None,
-                    engine='python'
+                    file_path, encoding="latin-1", sep=None, engine="python"
                 )
         else:
             df = pd.read_excel(file_path, engine="openpyxl")
 
-        table_html = df.head(20).to_html(
-            index=False,
-            classes="data-table",
-            border=0
-        )
+        table_html = df.head(20).to_html(index=False, classes="data-table", border=0)
 
         numeric_df = df.select_dtypes(include="number")
         stats_checked = True
@@ -203,27 +202,6 @@ def analyze_file_view(request, file_id):
     except Exception as e:
         messages.error(request, f"Error processing file: {str(e)}")
         error = str(e)
-    
-        
-    try:
-        last_ctx = {
-            "file_name": uploaded_file.name or os.path.basename(file_path),
-            "generated_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
-            "table_html": table_html or "",
-            "stats": stats or {},
-        }
-
-        
-        if isinstance(answer, (list, dict)):
-            last_ctx["answer"] = answer
-        elif isinstance(answer, str):
-            last_ctx["answer_text"] = answer
-
-        request.session["last_upload_context"] = last_ctx
-    except Exception:
-        
-        request.session["last_upload_context"] = {}
-     
 
     return render(
         request,
@@ -237,8 +215,6 @@ def analyze_file_view(request, file_id):
             "result": None,
             "loading": False,
             "error": error,
-            "is_csv": is_csv,
-            "is_database": False,
         },
     )
 
@@ -333,7 +309,9 @@ def ask_chat_view(request, source_type, source_id):
                         with connection.cursor() as cursor:
                             cursor.execute(sql_query)
                             columns = [col[0] for col in cursor.description]
-                            result = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                            result = [
+                                dict(zip(columns, row)) for row in cursor.fetchall()
+                            ]
                         answer = result if result else "No se encontraron resultados."
 
                 else:
@@ -403,6 +381,7 @@ def dashboard_view(request):
     files = UploadedFile.objects.filter(user=request.user)
     return render(request, "dashboard.html", {"files": files})
 
+
 @login_required
 @admin_required
 def admin_dashboard_view(request):
@@ -410,30 +389,35 @@ def admin_dashboard_view(request):
     files = UploadedFile.objects.all().order_by("-uploaded_at")
     return render(request, "admin_dashboard.html", {"files": files})
 
+
 def _build_sqlalchemy_url(ds: DataSource) -> str:
     """
     Construye el URL de conexión SQLAlchemy según el motor elegido.
     """
     if ds.engine == "postgresql":
         # driver psycopg2
-        return str(URL.create(
-            drivername="postgresql+psycopg2",
-            username=ds.username,
-            password=ds.password,
-            host=ds.host,
-            port=int(ds.port) if ds.port else None,
-            database=ds.db_name,
-        ))
+        return str(
+            URL.create(
+                drivername="postgresql+psycopg2",
+                username=ds.username,
+                password=ds.password,
+                host=ds.host,
+                port=int(ds.port) if ds.port else None,
+                database=ds.db_name,
+            )
+        )
     elif ds.engine == "mysql":
         # driver PyMySQL
-        return str(URL.create(
-            drivername="mysql+pymysql",
-            username=ds.username,
-            password=ds.password,
-            host=ds.host,
-            port=int(ds.port) if ds.port else None,
-            database=ds.db_name,
-        ))
+        return str(
+            URL.create(
+                drivername="mysql+pymysql",
+                username=ds.username,
+                password=ds.password,
+                host=ds.host,
+                port=int(ds.port) if ds.port else None,
+                database=ds.db_name,
+            )
+        )
     elif ds.engine == "sqlite":
         # Para sqlite usamos ruta absoluta (o relativa) al archivo .db / .sqlite
         path = ds.sqlite_path or ""
@@ -457,7 +441,9 @@ def connect_db_view(request):
 
             # Si se marca como activa, desactiva las demás del usuario
             if ds.is_active:
-                DataSource.objects.filter(user=request.user, is_active=True).update(is_active=False)
+                DataSource.objects.filter(user=request.user, is_active=True).update(
+                    is_active=False
+                )
 
             # Probar conexión
             try:
@@ -468,7 +454,9 @@ def connect_db_view(request):
                     conn.execute(text("SELECT 1"))
                 # Si llegamos aquí, la conexión funciona
                 ds.save()
-                messages.success(request, "Connection successful and configuration saved.")
+                messages.success(
+                    request, "Connection successful and configuration saved."
+                )
                 return redirect("analyze_db", db_id=ds.id)
             except Exception as e:
                 messages.error(request, f"Connection failed: {e}")
@@ -482,7 +470,6 @@ def connect_db_view(request):
 
 @login_required
 def connections_list_view(request):
-
     """
     Lista conexiones guardadas del usuario y permite activar una.
     """
@@ -491,7 +478,9 @@ def connections_list_view(request):
         ds_id = request.POST.get("activate_id")
         if ds_id:
             ds = get_object_or_404(DataSource, id=ds_id, user=request.user)
-            DataSource.objects.filter(user=request.user, is_active=True).update(is_active=False)
+            DataSource.objects.filter(user=request.user, is_active=True).update(
+                is_active=False
+            )
             ds.is_active = True
             ds.save()
             messages.success(request, f"'{ds.name}' is now the active connection.")
@@ -508,17 +497,27 @@ def sanitize_dataframe(df, max_text_length=100):
       - Removes completely empty columns
       - Truncates very long text values for display safety
     """
-    df = df.dropna(axis=1, how='all')
+    df = df.dropna(axis=1, how="all")
 
     sensitive_patterns = [
-        r"password", r"pass", r"pwd",
-        r"token", r"secret", r"auth",
-        r"apikey", r"api_key",
-        r"ssn", r"credit", r"card",
-        r"email", r"user_?id", r"login"
+        r"password",
+        r"pass",
+        r"pwd",
+        r"token",
+        r"secret",
+        r"auth",
+        r"apikey",
+        r"api_key",
+        r"ssn",
+        r"credit",
+        r"card",
+        r"email",
+        r"user_?id",
+        r"login",
     ]
     cols_to_drop = [
-        col for col in df.columns
+        col
+        for col in df.columns
         if any(re.search(pattern, col.lower()) for pattern in sensitive_patterns)
     ]
     if cols_to_drop:
@@ -526,8 +525,12 @@ def sanitize_dataframe(df, max_text_length=100):
 
     # --- 3. Truncate long text values ---
     for col in df.select_dtypes(include=["object", "string"]).columns:
-        df[col] = df[col].astype(str).apply(
-            lambda x: (x[:max_text_length] + "…") if len(x) > max_text_length else x
+        df[col] = (
+            df[col]
+            .astype(str)
+            .apply(
+                lambda x: (x[:max_text_length] + "…") if len(x) > max_text_length else x
+            )
         )
 
     return df, cols_to_drop
@@ -558,7 +561,7 @@ def analyze_db_view(request, db_id):
         if hidden_cols:
             messages.warning(
                 request,
-                f"{len(hidden_cols)} sensitive column(s) were hidden for security reasons."
+                f"{len(hidden_cols)} sensitive column(s) were hidden for security reasons.",
             )
 
         # Mostrar solo las primeras 4 columnas para evitar desbordes
@@ -566,9 +569,7 @@ def analyze_db_view(request, db_id):
 
         # Convertir a HTML para mostrar
         table_html = df_preview.head(20).to_html(
-            index=False,
-            classes="data-table",
-            border=0
+            index=False, classes="data-table", border=0
         )
 
         # Calcular estadísticas
@@ -647,21 +648,24 @@ def export_pdf_view(request):
                 logo_b64 = base64.b64encode(f.read()).decode("utf-8")
     except Exception:
         logo_b64 = ""
-    
 
-    html = template.render({
-        "export": data,
-        "logo_b64": logo_b64,
-    })
+    html = template.render(
+        {
+            "export": data,
+            "logo_b64": logo_b64,
+        }
+    )
 
     # Convertir a PDF en memoria
     result = io.BytesIO()
-    pdf = pisa.CreatePDF(io.BytesIO(html.encode("utf-8")), dest=result, encoding="utf-8")
+    pdf = pisa.CreatePDF(
+        io.BytesIO(html.encode("utf-8")), dest=result, encoding="utf-8"
+    )
     if pdf.err:
         return HttpResponseBadRequest("Error generando el PDF")
 
     # Descargar
-    filename = (data.get("file_name") or "DataScope_Report").replace('"', '')
+    filename = (data.get("file_name") or "DataScope_Report").replace('"', "")
     response = HttpResponse(result.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
     return response
@@ -680,7 +684,11 @@ def select_table_view(request, source_type, source_id):
     else:
         return render(request, "error.html", {"msg": "Tipo de fuente inválido"})
 
-    return render(request, "select_table.html", {"tables": tables, "source_id": source_id, "source_type": source_type})
+    return render(
+        request,
+        "select_table.html",
+        {"tables": tables, "source_id": source_id, "source_type": source_type},
+    )
 
 
 def show_table_view(request):
@@ -698,4 +706,6 @@ def show_table_view(request):
             df = get_table_data_from_file(uploaded, sheet_name)
 
         html = df.head(100).to_html(classes="table table-striped", index=False)
-        return render(request, "show_table.html", {"table_html": html, "table_name": table})
+        return render(
+            request, "show_table.html", {"table_html": html, "table_name": table}
+        )

@@ -1,8 +1,6 @@
 import os
 import pandas as pd
 from sqlalchemy import create_engine, inspect
-from django.conf import settings
-
 from .models import UploadedFile, DataSource
 
 
@@ -43,7 +41,9 @@ def get_table_names_from_source(data_source: DataSource):
     return tables
 
 
-def get_table_data_from_source(data_source: DataSource, table_name: str, limit: int = 1000):
+def get_table_data_from_source(
+    data_source: DataSource, table_name: str, limit: int = 1000
+):
     conn_string = build_connection_string(data_source)
     engine = create_engine(conn_string)
     query = f"SELECT * FROM {table_name} LIMIT {limit}"

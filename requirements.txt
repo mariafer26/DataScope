@@ -12,3 +12,4 @@ psycopg2-binary
 PyMySQL
 xhtml2pdf==0.2.17
 reportlab
+pytest

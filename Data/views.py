@@ -5,7 +5,6 @@ from .models import UploadedFile, DataSource
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
-import traceback
 import os
 import pandas as pd
 import re
@@ -269,8 +268,6 @@ def ask_chat_view(request, source_type, source_id):
         if question:
             chat_history.append({"sender": "user", "text": question})
             print("Pregunta recibida:", question)
-
-
             try:
                 if source_kind == "file":
                     file_path = source.file.path
@@ -356,14 +353,10 @@ def ask_chat_view(request, source_type, source_id):
             print("==== DEBUG RESPUESTA ====")
             print(bot_msg)
             print("==== FIN DEBUG ====")
-            
-
             # --- NUEVO: Si es una petición AJAX, devolvemos solo el último mensaje ---
             if request.headers.get("x-requested-with", "").lower() == "xmlhttprequest":
                 return JsonResponse(bot_msg, safe=False)
-
             # ... dentro del bloque POST, justo antes del return ...
-            
             # Si no es AJAX
             return redirect("ask_chat", source_type=source_kind, source_id=source_id)
 
@@ -373,7 +366,6 @@ def ask_chat_view(request, source_type, source_id):
         "source_type": source_kind,
         "chat_history": chat_history,
     })
-
 
 
 @login_required

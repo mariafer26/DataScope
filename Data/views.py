@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .forms import UploadFileForm, DBConnectionForm
-from .models import UploadedFile, DataSource
+from .forms import UploadFileForm, DBConnectionForm, FavoriteQuestionForm
+from .models import UploadedFile, DataSource, FavoriteQuestion
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
@@ -232,6 +232,7 @@ def ask_chat_view(request, source_type, source_id):
     source_type: 'file' o 'db'
     source_id: id del UploadedFile o DataSource
     """
+    initial_question = request.GET.get("question", "")
 
     # --- Determinar fuente ---
     if source_type == "file":
@@ -365,6 +366,7 @@ def ask_chat_view(request, source_type, source_id):
         "source": source,
         "source_type": source_kind,
         "chat_history": chat_history,
+        "initial_question": initial_question,
     })
 
 
@@ -701,3 +703,71 @@ def show_table_view(request):
         return render(
             request, "show_table.html", {"table_html": html, "table_name": table}
         )
+
+
+@login_required
+def favorite_questions_view(request):
+    if request.method == "POST":
+        form = FavoriteQuestionForm(request.POST)
+        if form.is_valid():
+            favorite = form.save(commit=False)
+            favorite.user = request.user
+            favorite.save()
+            messages.success(request, "Favorite question saved!")
+            return redirect("favorite_questions")
+    else:
+        form = FavoriteQuestionForm()
+
+    favorites = FavoriteQuestion.objects.filter(user=request.user).order_by("-created_at")
+    return render(request, "favorite_questions.html", {"favorites": favorites, "form": form})
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_favorite_question_view(request, question_id):
+    question = get_object_or_404(FavoriteQuestion, id=question_id, user=request.user)
+    question.delete()
+    messages.success(request, "Favorite question deleted.")
+    return redirect("favorite_questions")
+
+
+@login_required
+def use_favorite_question_view(request, question_id):
+    question = get_object_or_404(FavoriteQuestion, id=question_id, user=request.user)
+    
+    # Find the last source the user interacted with to redirect them back
+    # This is a simple approach; a more robust solution might store the
+    # last active source in the session.
+    last_source = None
+    if 'last_upload_context' in request.session:
+        # This is a custom session key I see in the code
+        # It seems to be related to the analyze_db_view
+        # I will assume it has the source info.
+        # A better approach would be to have a consistent way of storing the last source.
+        pass # I will leave this for now and redirect to dashboard if no source is found
+
+    # For now, let's just redirect to the dashboard, and the user can select the source again.
+    # A better implementation would be to redirect to the last used source.
+    
+    # The user will be redirected to the dashboard, and from there they can select a source
+    # and the question will be in the chat.
+    # I will modify the ask_chat_view to handle the question from the URL.
+
+    # I will construct the redirect URL to the chat page of the last active source
+    # For now, I will just redirect to the dashboard.
+    # I will need to find a way to get the last active source.
+
+    # Looking at the code, there is a `is_active` field in the `DataSource` model.
+    # I will use that to find the active source.
+    active_source = DataSource.objects.filter(user=request.user, is_active=True).first()
+
+    if active_source:
+        return redirect(f"/ask/db/{active_source.id}/?question={question.question_text}")
+    else:
+        # If no active DB source, try to find the last uploaded file
+        last_file = UploadedFile.objects.filter(user=request.user).order_by("-uploaded_at").first()
+        if last_file:
+            return redirect(f"/ask/file/{last_file.id}/?question={question.question_text}")
+
+    messages.info(request, "Please select a data source to use this favorite question.")
+    return redirect("dashboard")

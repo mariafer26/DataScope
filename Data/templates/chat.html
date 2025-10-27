@@ -126,7 +126,7 @@ form button:disabled {
 
   <form id="chat-form">
     {% csrf_token %}
-    <input type="text" name="question" id="question" placeholder="Ask your question..." autocomplete="off" required>
+    <input type="text" name="question" id="question" placeholder="Ask your question..." value="{{ initial_question|escapejs }}" autocomplete="off" required>
     <button type="submit" id="send-btn">Send</button>
   </form>
 </div>

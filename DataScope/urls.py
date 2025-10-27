@@ -41,6 +41,10 @@ urlpatterns = [
         name="select_table",
     ),
     path("show-table/", views.show_table_view, name="show_table"),
+    # Favorite questions
+    path("favorites/", views.favorite_questions_view, name="favorite_questions"),
+    path("favorites/delete/<int:question_id>/", views.delete_favorite_question_view, name="delete_favorite_question"),
+    path("favorites/use/<int:question_id>/", views.use_favorite_question_view, name="use_favorite_question"),
 ]
 
 if settings.DEBUG:

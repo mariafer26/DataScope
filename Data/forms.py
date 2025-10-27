@@ -1,5 +1,5 @@
 from django import forms
-from .models import UploadedFile, DataSource
+from .models import UploadedFile, DataSource, FavoriteQuestion
 import os
 import pandas as pd
 
@@ -86,3 +86,15 @@ class DBConnectionForm(forms.ModelForm):
             for f in ("host", "port", "db_name", "username", "password"):
                 cleaned[f] = None
         return cleaned
+
+
+class FavoriteQuestionForm(forms.ModelForm):
+    class Meta:
+        model = FavoriteQuestion
+        fields = ["question_text"]
+        widgets = {
+            "question_text": forms.Textarea(attrs={"rows": 2, "placeholder": "E.g., What are the total sales per region?", "class": "stylish-textarea"})
+        }
+        labels = {
+            "question_text": "Favorite Question"
+        }

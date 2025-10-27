@@ -29,6 +29,15 @@ class Query(models.Model):
         return f"Query by {self.user.username} at {self.timestamp}"
 
 
+class FavoriteQuestion(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    question_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Favorite question by {self.user.username}: "{self.question_text[:50]}..."'
+
+
 # Modelo de archivos subidos
 class UploadedFile(models.Model):
     user = models.ForeignKey(

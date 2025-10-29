@@ -84,3 +84,16 @@ class DataSource(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.engine})"
+
+
+class QueryHistory(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="query_history")
+    question = models.TextField()
+    result_preview = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.question[:50]}..."

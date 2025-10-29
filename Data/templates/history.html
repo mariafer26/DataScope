@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <div class="card shadow-lg border-0 rounded-4">
+    <div class="card-body">
+      <h2 class="fw-bold text-center mb-4">Query History</h2>
+      {% if page_obj %}
+      <div class="table-responsive">
+        <table class="table align-middle table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Question</th>
+              <th>Result Preview</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in page_obj %}
+            <tr>
+              <td>{{ item.created_at|date:"Y-m-d H:i" }}</td>
+              <td class="text-break">{{ item.question }}</td>
+              <td class="text-break text-muted">{{ item.result_preview|truncatechars:120 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <nav class="d-flex justify-content-center mt-4">
+        <ul class="pagination">
+          {% if page_obj.has_previous %}
+          <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+          {% endif %}
+          <li class="page-item active"><a class="page-link">{{ page_obj.number }}</a></li>
+          {% if page_obj.has_next %}
+          <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% else %}
+      <p class="text-center text-muted mt-3">No queries logged yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

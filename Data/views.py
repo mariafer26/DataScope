@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .forms import UploadFileForm, DBConnectionForm, FavoriteQuestionForm
-from .models import UploadedFile, DataSource, FavoriteQuestion
+from .models import UploadedFile, DataSource, FavoriteQuestion, QueryHistory
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
@@ -20,6 +20,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.template.loader import get_template
+from django.core.paginator import Paginator
 from xhtml2pdf import pisa
 import io
 import base64
@@ -331,6 +332,8 @@ def ask_chat_view(request, source_type, source_id):
                     }
 
                 chat_history.append(bot_msg)
+                from .views import log_query
+                log_query(request.user, question, bot_msg["text"] or bot_msg["data"])
 
             except Exception as e:
                 bot_msg = {
@@ -340,6 +343,8 @@ def ask_chat_view(request, source_type, source_id):
                     "data": []
                 }
                 chat_history.append(bot_msg)
+                from .views import log_query
+                log_query(request.user, question, bot_msg["text"] or bot_msg["data"])
 
             finally:
                 if source_kind == "file" and "engine" in locals() and "tablas_cargadas" in locals():
@@ -771,3 +776,23 @@ def use_favorite_question_view(request, question_id):
 
     messages.info(request, "Please select a data source to use this favorite question.")
     return redirect("dashboard")
+
+
+def log_query(user, question, result):
+    """Guarda en BD cada pregunta y su respuesta resumida."""
+    if user.is_authenticated:
+        QueryHistory.objects.create(
+            user=user,
+            question=question,
+            result_preview=str(result)[:400]
+        )
+
+
+@login_required
+def history_view(request):
+    """Vista para ver el historial de preguntas y respuestas del usuario."""
+    history = QueryHistory.objects.filter(user=request.user)
+    paginator = Paginator(history, 8)  # 8 registros por página
+    page = request.GET.get("page")
+    page_obj = paginator.get_page(page)
+    return render(request, "history.html", {"page_obj": page_obj})

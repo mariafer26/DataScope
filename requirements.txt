@@ -7,7 +7,6 @@ sqlalchemy
 flake8==6.1.0
 black==23.7.0
 pbr
-SQLAlchemy
 psycopg2-binary
 PyMySQL
 xhtml2pdf==0.2.17

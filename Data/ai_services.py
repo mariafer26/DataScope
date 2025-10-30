@@ -17,7 +17,7 @@ def get_sql_from_question(question: str, table_name: str) -> str:
     Generates an SQL query from a natural language question using Google's Generative AI.
     Only uses tables within the same temporary database created for the uploaded file.
     """
-    model = genai.GenerativeModel("models/gemini-2.5-pro")
+    model = genai.GenerativeModel("gemini-pro")
 
     # Obtener todas las tablas dentro de la misma base (no las globales del sistema)
     with connection.cursor() as cursor:
@@ -65,15 +65,10 @@ def get_sql_from_question(question: str, table_name: str) -> str:
 
     # Si el modelo escribió texto antes del SELECT, limpiarlo
     sql_query = re.sub(
-        r"^[^\w]*(SELECT|WITH|INSERT|UPDATE|DELETE)",
+        r"^[\w]*(SELECT|WITH|INSERT|UPDATE|DELETE)",
         r"\1",
         sql_query,
         flags=re.IGNORECASE,
-    )
-
-    # Quitar frases tipo "SQLite" o "Query:"
-    sql_query = re.sub(
-        r"\b(SQLite|MySQL|PostgreSQL)\b", "", sql_query, flags=re.IGNORECASE
     )
 
     # Asegurar que termina con punto y coma

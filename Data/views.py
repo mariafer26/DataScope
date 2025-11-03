@@ -470,7 +470,7 @@ def ask_chat_view(request, source_type, source_id):
     # --- Determinar fuente ---
     if source_type == "file":
         source = get_object_or_404(UploadedFile, id=source_id, user=request.user)
-        source_label = f"Archivo: {source.name}"
+        source_label = f"File: {source.name}"
         source_kind = "file"
     elif source_type == "db":
         source = get_object_or_404(DataSource, id=source_id, user=request.user)
@@ -487,8 +487,8 @@ def ask_chat_view(request, source_type, source_id):
         chat_history.append({
             "sender": "bot",
             "text": (
-                f"¡Hola! Estás conectado a {source_label}. "
-                "Puedes hacerme preguntas sobre los datos, generar resúmenes o ejecutar análisis."
+                f"Hello! You are connected to file: {source_label}. "
+                "You can ask questions about the data, generate summaries, or run analysis."
             ),
             "is_json": False,
             "data": []
@@ -537,6 +537,24 @@ def ask_chat_view(request, source_type, source_id):
                         sql_query = ai_services.get_sql_from_question(
                             f"{context_prompt}\n{question}", tablas_cargadas[0]
                         )
+                        if sql_query == "__NLP_ERROR__":
+                            bot_msg = {
+                                "sender": "bot",
+                                "text": (
+                                    "🤖 No pude entender tu pregunta.\n\n"
+                                    "💡 Intenta reformularla. Ejemplos:\n"
+                                    "- Total de ventas por mes\n"
+                                    "- Promedio de edad de empleados\n"
+                                    "- Filtrar clientes por país\n"
+                                ),
+                                "is_json": False,
+                                "data": []
+                            }
+                            chat_history.append(bot_msg)
+                            request.session[session_key] = chat_history
+                            request.session.modified = True
+                            return JsonResponse(bot_msg, safe=False)
+                    
                         with connection.cursor() as cursor:
                             cursor.execute(sql_query)
                             columns = [col[0] for col in cursor.description]
@@ -570,10 +588,11 @@ def ask_chat_view(request, source_type, source_id):
             except Exception as e:
                 bot_msg = {
                     "sender": "bot",
-                    "text": f"⚠ Error: {str(e)}",
+                    "text": f"❌ Ocurrió un error al procesar tu solicitud: {str(e)}",
                     "is_json": False,
                     "data": []
                 }
+                         
                 chat_history.append(bot_msg)
                 from .views import log_query
                 log_query(request.user, question, bot_msg["text"] or bot_msg["data"])

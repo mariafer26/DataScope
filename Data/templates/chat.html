@@ -195,7 +195,22 @@ form.addEventListener("submit", async (e) => {
       table += `</tbody></table>`;
       loadingMsg.innerHTML = table;
     } else {
-      loadingMsg.innerHTML = `<p>${data.text}</p>`;
+      if (data.text && data.text.includes("No pude entender tu pregunta")) {
+  loadingMsg.innerHTML = `
+    <p>🤖 I couldn't understand your question.</p>
+    <div style="margin-top: 10px; padding: 10px; background:#fff8e1; border-left:4px solid #ff9800; border-radius:6px;">
+        <strong>💡Try asking:</strong>
+        <ul style="margin-top:8px; padding-left:18px;">
+            <li> Total sales by month</li>
+            <li>Average employee age</li>
+            <li>Filter customers by country</li>
+        </ul>
+    </div>
+  `;
+} else {
+  loadingMsg.innerHTML = `<p>${data.text}</p>`;
+}
+
     }
 
   } catch (error) {

@@ -6,6 +6,15 @@ Analyze Data - DataScope
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/upload.css' %}" />
 <style>
+  /* === tamaño del gráfico === */
+  .chart-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .chart-wrap canvas {
+    width: 100% !important;
+    height: 360px !important; /* ajusta el alto si quieres */
+  }
   .upload-container {
     max-width: 1200px;
     margin: 6rem auto 2rem;
@@ -258,6 +267,14 @@ Analyze Data - DataScope
     </div>
   </section>
   {% endif %}
+  {% if chart_config %}
+<section class="results-container" style="margin-top:2rem">
+  <h2 class="results-title">Visualization</h2>
+  <div class="card chart-wrap" style="padding:1rem; border-radius:16px;">
+    <canvas id="resultChart"></canvas>
+  </div>
+</section>
+{% endif %}
 
   <section class="upload-container">
     <h1>View chat</h1>
@@ -309,6 +326,23 @@ Analyze Data - DataScope
 </section>
 {% endif %}
 
+{% endblock %} 
 
-
+{% block extra_js %}
+{% if chart_config %}
+<script>
+  (function () {
+    try {
+      const cfg = JSON.parse('{{ chart_config|escapejs }}');
+      const el = document.getElementById('resultChart');
+      if (!el) return;
+      const ctx = el.getContext('2d');
+      if (window._resultChart) { window._resultChart.destroy(); }
+      window._resultChart = new Chart(ctx, cfg);
+    } catch (e) {
+      console.error('Chart config error:', e);
+    }
+  })();
+</script>
+{% endif %}
 {% endblock %}

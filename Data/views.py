@@ -27,6 +27,9 @@ from django.core.paginator import Paginator
 from xhtml2pdf import pisa
 import io
 import base64
+import json
+import numpy as np
+from datetime import datetime
 from django.contrib.staticfiles import finders
 from .tables import (
     get_table_names_from_source,
@@ -92,6 +95,223 @@ def _sanitize_table_name(name):
     return name
 
 
+def build_chart_config_from_df(df: pd.DataFrame) -> dict | None:
+    """
+    Construye una config de Chart.js 'inteligente' según el DataFrame:
+      - Si hay fechas: elige la mejor columna datetime, la mejor numérica (por varianza)
+        y agrega por frecuencia adaptativa (D, W o M) según el rango total.
+      - Si hay categórica + numérica: agrega y muestra TOP_N; el resto como 'Others'.
+        Si categorías <= 6 => pie, si no => bar.
+      - Si solo hay categórica: conteo de ocurrencias (TOP_N + 'Others').
+    Devuelve None si no hay nada dibujable.
+    """
+    if df is None or df.empty:
+        return None
+
+    dfx = df.copy()
+
+    # --- 1) Parseo agresivo de posibles fechas en columnas de tipo object ---
+    for col in dfx.columns:
+        if dfx[col].dtype == object:
+            try:
+                parsed = pd.to_datetime(dfx[col], errors="raise", infer_datetime_format=True, utc=False)
+                dfx[col] = pd.to_datetime(dfx[col], errors="coerce")
+            except Exception:
+                pass
+
+    # --- 2) Identificar tipos ---
+    num_cols = [c for c in dfx.columns if pd.api.types.is_numeric_dtype(dfx[c])]
+    dt_cols  = [c for c in dfx.columns if pd.api.types.is_datetime64_any_dtype(dfx[c])]
+
+    # Categóricas candidatas: cardinalidad moderada (<= 50) y no num/dt
+    cat_cols = []
+    for c in dfx.columns:
+        if c in num_cols or c in dt_cols:
+            continue
+        nunique = dfx[c].nunique(dropna=True)
+        if 0 < nunique <= 50:
+            cat_cols.append((c, nunique))
+    # ordenar por cardinalidad ascendente (prioriza más compactas)
+    cat_cols = [c for c, _ in sorted(cat_cols, key=lambda x: x[1])]
+
+    # Helper: elegir mejor columna numérica por varianza (informativa)
+    def best_numeric(cols):
+        if not cols:
+            return None
+        if len(cols) == 1:
+            return cols[0]
+        variances = []
+        for c in cols:
+            s = dfx[c].dropna().astype(float)
+            variances.append((c, float(s.var()) if len(s) else -1.0))
+        variances.sort(key=lambda x: x[1], reverse=True)
+        return variances[0][c := 0]  # devuelve nombre con mayor varianza
+
+    # Helper: elegir mejor datetime por número de valores no nulos
+    def best_datetime(cols):
+        if not cols:
+            return None
+        if len(cols) == 1:
+            return cols[0]
+        scores = []
+        for c in cols:
+            s = dfx[c].dropna()
+            scores.append((c, int(s.shape[0])))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[0][0]
+
+    # --- 3) Caso serie temporal ---
+    if dt_cols and num_cols:
+        tcol = best_datetime(dt_cols)
+        ncol = best_numeric(num_cols)
+        if tcol and ncol:
+            tmp = dfx[[tcol, ncol]].dropna()
+            if not tmp.empty:
+                # Rango para decidir frecuencia
+                tmin, tmax = tmp[tcol].min(), tmp[tcol].max()
+                if isinstance(tmin, pd.Timestamp) and isinstance(tmax, pd.Timestamp):
+                    total_days = (tmax - tmin).days if pd.notna(tmax) and pd.notna(tmin) else None
+                else:
+                    total_days = None
+
+                if total_days is None:
+                    freq = "D"
+                elif total_days <= 45:
+                    freq = "D"
+                elif total_days <= 360:
+                    freq = "W"
+                else:
+                    freq = "M"
+
+                agg = (
+                    tmp.set_index(tcol)
+                       .groupby(pd.Grouper(freq=freq))[ncol]
+                       .sum()
+                       .reset_index()
+                       .dropna()
+                )
+                if agg.empty:
+                    return None
+
+                # Etiquetas legibles según freq
+                if freq == "D":
+                    labels = agg[tcol].dt.strftime("%Y-%m-%d").tolist()
+                elif freq == "W":
+                    labels = agg[tcol].dt.strftime("W%U %Y").tolist()
+                else:  # "M"
+                    labels = agg[tcol].dt.strftime("%Y-%m").tolist()
+
+                data = agg[ncol].astype(float).round(2).tolist()
+
+                return {
+                    "type": "line",
+                    "data": {
+                        "labels": labels,
+                        "datasets": [{
+                            "label": f"{ncol} over time",
+                            "data": data,
+                            "tension": 0.25,
+                            "pointRadius": 2,
+                            "borderWidth": 2,
+                            # sin colores fijos, Chart.js pondrá los suyos
+                        }]
+                    },
+                    "options": {
+                        "responsive": True,
+                        "maintainAspectRatio": False,  # usamos nuestro alto de CSS
+                        "plugins": {
+                            "legend": {"display": True},
+                            "tooltip": {"mode": "index", "intersect": False}
+                        },
+                        "scales": {
+                            "x": {"title": {"display": True, "text": str(tcol)}},
+                            "y": {"title": {"display": True, "text": str(ncol)}, "beginAtZero": True}
+                        }
+                    }
+                }
+
+    # --- 4) Categórica + numérica ---
+    if cat_cols and num_cols:
+        ccol = cat_cols[0]
+        ncol = best_numeric(num_cols) or num_cols[0]
+        tmp = dfx[[ccol, ncol]].dropna()
+        if not tmp.empty:
+            agg = tmp.groupby(ccol, dropna=True)[ncol].sum().reset_index()
+            if agg.empty:
+                return None
+            agg = agg.sort_values(ncol, ascending=False)
+
+            TOP_N = 10
+            MAX_PIE = 6
+
+            top = agg.head(TOP_N).copy()
+            if len(agg) > TOP_N:
+                others_val = float(agg.iloc[TOP_N:][ncol].sum())
+                top = pd.concat([top, pd.DataFrame({ccol: ["Others"], ncol: [others_val]})], ignore_index=True)
+
+            labels = top[ccol].astype(str).tolist()
+            data = top[ncol].astype(float).round(2).tolist()
+
+            if len(labels) <= MAX_PIE:
+                chart_type = "pie"
+                options = {"responsive": True, "plugins": {"legend": {"display": True}}}
+            else:
+                chart_type = "bar"
+                options = {
+                    "responsive": True,
+                    "maintainAspectRatio": False,
+                    "plugins": {"legend": {"display": True}},
+                    "scales": {
+                        "x": {"title": {"display": True, "text": str(ccol)}},
+                        "y": {"title": {"display": True, "text": str(ncol)}, "beginAtZero": True}
+                    }
+                }
+
+            return {
+                "type": chart_type,
+                "data": {"labels": labels, "datasets": [{"label": f"{ncol} by {ccol}", "data": data}]},
+                "options": options
+            }
+
+    # --- 5) Solo categórica => conteo ---
+    if cat_cols and not num_cols:
+        ccol = cat_cols[0]
+        counts = dfx[ccol].dropna().astype(str).value_counts()
+        if counts.empty:
+            return None
+
+        TOP_N = 10
+        MAX_PIE = 6
+
+        labels = counts.index.tolist()
+        values = counts.values.tolist()
+
+        if len(labels) > TOP_N:
+            top_labels = labels[:TOP_N]
+            top_vals = values[:TOP_N]
+            others = sum(values[TOP_N:])
+            top_labels.append("Others")
+            top_vals.append(others)
+            labels, values = top_labels, top_vals
+
+        chart_type = "pie" if len(labels) <= MAX_PIE else "bar"
+        options = {
+            "responsive": True,
+            "maintainAspectRatio": False,
+            "plugins": {"legend": {"display": True}},
+        }
+        if chart_type == "bar":
+            options["scales"] = {"x": {"title": {"display": True, "text": str(ccol)}},
+                                 "y": {"beginAtZero": True}}
+
+        return {
+            "type": chart_type,
+            "data": {"labels": labels, "datasets": [{"label": f"Count by {ccol}", "data": values}]},
+            "options": options
+        }
+
+    return None
+
 def upload_file_view(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
@@ -133,6 +353,8 @@ def analyze_file_view(request, file_id):
     answer = None
     error = ""
     stats_checked = False
+    # ---  valores por defecto para la gráfica ---
+    chart_json = None 
 
     try:
         if ext == ".csv":
@@ -202,6 +424,10 @@ def analyze_file_view(request, file_id):
             for c in df.columns
         ]
 
+         # --- NUEVO: construir configuración para Chart.js ---
+        chart_cfg = build_chart_config_from_df(df)
+        chart_json = json.dumps(chart_cfg) if chart_cfg else None
+
     except Exception as e:
         messages.error(request, f"Error processing file: {str(e)}")
         error = str(e)
@@ -218,6 +444,9 @@ def analyze_file_view(request, file_id):
             "result": None,
             "loading": False,
             "error": error,
+            "chart_config": chart_json,          #
+            "is_csv": (ext == ".csv"),           # 
+            "is_database": False,                #
         },
     )
 
@@ -592,8 +821,8 @@ def analyze_db_view(request, db_id):
         request.session["last_upload_context"] = {
             "file_name": ds.name,
             "generated_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
-            "table_html": table_html,
-            "stats": stats,
+            "table_html": table_html or "",
+            "stats": stats or {},
         }
 
         # Renderizar plantilla

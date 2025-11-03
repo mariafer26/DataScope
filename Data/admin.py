@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import CustomUser, UploadedFile, Query
 
 
-# Personaliza cómo se mostrará el usuario en el admin
+# Personaliza cómo se mostrará el usuario en el admi
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
     list_display = ("username", "email", "role", "is_staff", "is_active")

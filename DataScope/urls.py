@@ -52,6 +52,9 @@ urlpatterns = [
     path('password_reset/done/', auth_views.PasswordResetDoneView.as_view(template_name='password_reset_done.html'), name='password_reset_done'),
     path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='password_reset_confirm.html', success_url=reverse_lazy('password_reset_complete')), name='password_reset_confirm'),
     path('reset/done/', auth_views.PasswordResetCompleteView.as_view(template_name='password_reset_complete.html'), name='password_reset_complete'),
+    path("data-sources/", views.data_sources_view, name="data_sources"),
+    path("set-active-source/", views.set_active_source_view, name="set_active_source"),
+    path("quick-switch/", views.quick_switch_view, name="quick_switch"),
 ]
 
 if settings.DEBUG:

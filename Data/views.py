@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
 from .forms import UploadFileForm, DBConnectionForm, FavoriteQuestionForm
 from .models import UploadedFile, DataSource, FavoriteQuestion, QueryHistory
 from django.contrib.auth import authenticate, login, logout
@@ -7,6 +9,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
 import os
 import pandas as pd
+import json
 import re
 from django.db import connection
 from . import ai_services
@@ -32,7 +35,7 @@ from .tables import (
     get_table_data_from_file,
 )
 
-
+#set as default source
 def home(request):
     return render(request, "base.html")
 
@@ -710,6 +713,7 @@ def show_table_view(request):
         )
 
 
+
 @login_required
 def favorite_questions_view(request):
     if request.method == "POST":
@@ -796,3 +800,197 @@ def history_view(request):
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
     return render(request, "history.html", {"page_obj": page_obj})
+
+
+@login_required
+def data_sources_view(request):
+    """
+    Vista principal para seleccionar y cambiar entre fuentes de datos.
+    Muestra tanto archivos subidos como conexiones de bases de datos.
+    """
+    # Obtener todas las fuentes del usuario
+    uploaded_files = UploadedFile.objects.filter(user=request.user).order_by('-uploaded_at')
+    db_connections = DataSource.objects.filter(user=request.user).order_by('-created_at')
+
+    # Obtener la fuente activa actual (si existe)
+    active_db = db_connections.filter(is_active=True).first()
+
+    # Contar totales
+    total_sources = uploaded_files.count() + db_connections.count()
+
+    # Información de la fuente seleccionada (si hay una)
+    selected_source = None
+    selected_type = None
+    source_info = None
+
+    # Verificar si se seleccionó una fuente mediante GET
+    source_id = request.GET.get('source_id')
+    source_type = request.GET.get('source_type')  # 'file' o 'db'
+
+    if source_id and source_type:
+        if source_type == 'file':
+            try:
+                selected_source = UploadedFile.objects.get(id=source_id, user=request.user)
+                selected_type = 'file'
+                # Obtener información básica del archivo
+                source_info = get_file_info(selected_source)
+            except UploadedFile.DoesNotExist:
+                messages.error(request, "File not found.")
+
+        elif source_type == 'db':
+            try:
+                selected_source = DataSource.objects.get(id=source_id, user=request.user)
+                selected_type = 'db'
+                # Obtener información básica de la base de datos
+                source_info = get_db_info(selected_source)
+            except DataSource.DoesNotExist:
+                messages.error(request, "Database connection not found.")
+
+    context = {
+        'uploaded_files': uploaded_files,
+        'db_connections': db_connections,
+        'active_db': active_db,
+        'total_sources': total_sources,
+        'selected_source': selected_source,
+        'selected_type': selected_type,
+        'source_info': source_info,
+    }
+
+    return render(request, 'data_sources.html', context)
+
+
+def get_file_info(uploaded_file):
+    """
+    Obtiene información básica de un archivo sin cargarlo completamente.
+    """
+    info = {
+        'name': uploaded_file.name,
+        'type': 'CSV File' if uploaded_file.name.lower().endswith('.csv') else 'Excel File',
+        'uploaded_at': uploaded_file.uploaded_at,
+        'status': 'Active',
+        'row_count': None,
+        'column_count': None,
+    }
+
+    try:
+        file_path = uploaded_file.file.path
+        ext = os.path.splitext(file_path)[1].lower()
+
+        if ext == '.csv':
+            # Leer solo las primeras filas para obtener info
+            df = pd.read_csv(file_path, nrows=0)
+            info['column_count'] = len(df.columns)
+
+            # Contar filas (más eficiente)
+            with open(file_path, 'r', encoding='utf-8-sig') as f:
+                info['row_count'] = sum(1 for line in f) - 1  # -1 para el header
+
+        elif ext in ['.xls', '.xlsx']:
+            xls = pd.ExcelFile(file_path)
+            info['type'] = f'Excel File ({len(xls.sheet_names)} sheets)'
+            # Leer primera hoja para info básica
+            df = pd.read_excel(file_path, nrows=0)
+            info['column_count'] = len(df.columns)
+
+    except Exception as e:
+        info['error'] = str(e)
+
+    return info
+
+
+def get_db_info(data_source):
+    """
+    Obtiene información básica de una conexión de base de datos.
+    """
+    info = {
+        'name': data_source.name,
+        'type': data_source.get_engine_display(),
+        'created_at': data_source.created_at,
+        'status': 'Active' if data_source.is_active else 'Inactive',
+        'host': data_source.host if data_source.engine != 'sqlite' else 'Local file',
+        'database': data_source.db_name if data_source.engine != 'sqlite' else data_source.sqlite_path,
+        'table_count': None,
+    }
+
+    try:
+        # Intentar conectar y obtener info de tablas
+        db_url = _build_sqlalchemy_url(data_source)
+        engine = create_engine(db_url)
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        info['table_count'] = len(tables)
+        info['connection_status'] = 'Connected'
+    except Exception as e:
+        info['connection_status'] = 'Connection failed'
+        info['error'] = str(e)
+
+    return info
+
+
+@login_required
+@require_http_methods(["POST"])
+def set_active_source_view(request):
+    """
+    Establece una fuente de datos como activa y redirige a su análisis.
+    """
+    source_type = request.POST.get('source_type')
+    source_id = request.POST.get('source_id')
+
+    if not source_type or not source_id:
+        messages.error(request, "Invalid request.")
+        return redirect('data_sources')
+
+    if source_type == 'file':
+        try:
+            uploaded_file = UploadedFile.objects.get(id=source_id, user=request.user)
+            messages.success(request, f"Now analyzing: {uploaded_file.name}")
+            return redirect('analyze_file', file_id=uploaded_file.id)
+        except UploadedFile.DoesNotExist:
+            messages.error(request, "File not found.")
+            return redirect('data_sources')
+
+    elif source_type == 'db':
+        try:
+            db_source = DataSource.objects.get(id=source_id, user=request.user)
+                        # Desactivar otras conexiones
+            DataSource.objects.filter(user=request.user, is_active=True).update(is_active=False)
+
+            # Activar la seleccionada
+            db_source.is_active = True
+            db_source.save()
+
+            messages.success(request, f"Now connected to: {db_source.name}")
+            return redirect('analyze_db', db_id=db_source.id)
+        except DataSource.DoesNotExist:
+            messages.error(request, "Database connection not found.")
+            return redirect('data_sources')
+
+    else:
+        messages.error(request, "Invalid source type.")
+        return redirect('data_sources')
+
+
+@login_required
+def quick_switch_view(request):
+    """
+    Vista rápida para cambiar entre fuentes sin recargar completamente.
+    Usada desde el navbar o header.
+    """
+    if request.method == 'POST':
+        source_type = request.POST.get('source_type')
+        source_id = request.POST.get('source_id')
+
+        if source_type == 'file':
+            return redirect('analyze_file', file_id=source_id)
+        elif source_type == 'db':
+            # Activar la conexión
+            try:
+                db_source = DataSource.objects.get(id=source_id, user=request.user)
+                DataSource.objects.filter(user=request.user, is_active=True).update(is_active=False)
+                db_source.is_active = True
+                db_source.save()
+                return redirect('analyze_db', db_id=source_id)
+            except DataSource.DoesNotExist:
+                messages.error(request, "Database not found.")
+
+    return redirect('data_sources')

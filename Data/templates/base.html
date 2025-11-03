@@ -36,6 +36,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 0 1rem;
+            gap: 2rem;
         }
 
         .logo {
@@ -49,6 +50,8 @@
             display: flex;
             gap: 1rem;
             list-style: none;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
         .nav-links a {
@@ -79,9 +82,86 @@
             color: #8B45C7;
         }
 
+        .dropdown {
+    position: relative;
+}
+
+.dropdown-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    background: rgba(139, 69, 199, 0.05);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    color: #2D1B69;
+    font-weight: 500;
+}
+
+.dropdown-toggle:hover {
+    background: rgba(139, 69, 199, 0.12);
+    color: #8B45C7;
+}
+
+.dropdown-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.3s ease;
+}
+
+.dropdown:hover .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(139, 69, 199, 0.2);
+    padding: 0.5rem;
+    min-width: 200px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(139, 69, 199, 0.1);
+    z-index: 1001;
+}
+
+.dropdown:hover .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-menu a {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: #2D1B69;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+}
+
+.dropdown-menu a:hover {
+    background: rgba(139, 69, 199, 0.08);
+    color: #8B45C7;
+    transform: translateX(4px);
+}
+
+.dropdown-icon {
+    font-size: 1.1rem;
+}
+
         .auth-buttons {
             display: flex;
             gap: 1rem;
+            align-items: center;
         }
 
         .btn-login {
@@ -115,6 +195,53 @@
         .btn-register:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(139, 69, 199, 0.4);
+        }
+
+        /* Quick Source Switcher - NUEVO */
+        .quick-source-switcher {
+            position: relative;
+        }
+
+        .quick-source-select {
+            padding: 0.5rem 2.5rem 0.5rem 1rem;
+            background: rgba(139, 69, 199, 0.05);
+            border: 2px solid rgba(139, 69, 199, 0.2);
+            border-radius: 25px;
+            color: #2D1B69;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            appearance: none;
+            min-width: 200px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%238B45C7' stroke-width='2' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1rem;
+        }
+
+        .quick-source-select:hover {
+            border-color: #8B45C7;
+            background: rgba(139, 69, 199, 0.1);
+        }
+
+        .quick-source-select:focus {
+            outline: none;
+            border-color: #8B45C7;
+            box-shadow: 0 0 0 3px rgba(139, 69, 199, 0.1);
+        }
+
+        .quick-source-select optgroup {
+            background: white;
+            color: #2D1B69;
+            font-weight: 600;
+            padding: 0.5rem;
+        }
+
+        .quick-source-select option {
+            background: white;
+            color: #2D1B69;
+            padding: 0.5rem;
         }
 
         /* Hero Section */
@@ -400,35 +527,272 @@
             color: rgba(255, 255, 255, 0.6);
         }
 
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
         /* Responsive */
+        @media (max-width: 968px) {
+            .nav-container {
+                flex-wrap: wrap;
+            }
+
+            .nav-links {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+                margin-top: 1rem;
+            }
+
+            .quick-source-switcher {
+                order: 2;
+            }
+
+            .quick-source-select {
+                min-width: 150px;
+                font-size: 0.8rem;
+            }
+        }
+
         @media (max-width: 768px) {
             .hero-content {
                 grid-template-columns: 1fr;
                 text-align: center;
             }
-            
+
             .nav-links {
-                display: none;
+                flex-direction: column;
+                gap: 0.5rem;
             }
-            
+
             .hero-visual {
                 margin-top: 2rem;
             }
-            
+
             .floating-cards-container {
                 flex-direction: column;
                 gap: 1rem;
             }
-            
+
             .floating-card {
                 width: 100%;
                 max-width: 280px;
             }
+
+            .quick-source-select {
+                width: 100%;
+            }
         }
+.nav-container {
+    flex-wrap: nowrap;
+    overflow: visible;
+}
+
+.auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+}
+
+.btn-register, .btn-login {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.quick-source-switcher {
+    flex-shrink: 1;
+    min-width: 180px;
+}
+
+/* Asegura que el contenido del header no se recorte */
+.header {
+    overflow: visible;
+}
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.nav-container {
+    max-width: 1300px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.75rem 2rem;
+    flex-wrap: nowrap;
+}
+
+/* --- LOGO --- */
+.logo {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #2D1B69;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+/* --- SECCIÓN CENTRAL (menú + switcher) --- */
+.nav-section {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex: 1;
+    justify-content: flex-start;
+}
+
+/* --- LINKS --- */
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: nowrap;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-links a {
+    text-decoration: none;
+    color: #2D1B69;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.nav-links a:hover {
+    background: rgba(139, 69, 199, 0.08);
+    color: #8B45C7;
+}
+
+/* --- SWITCHER --- */
+.quick-source-switcher {
+    flex-shrink: 0;
+}
+
+.quick-source-select {
+    padding: 0.5rem 2.5rem 0.5rem 1rem;
+    border: 2px solid rgba(139, 69, 199, 0.2);
+    border-radius: 25px;
+    background: rgba(139, 69, 199, 0.05);
+    color: #2D1B69;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    appearance: none;
+    min-width: 190px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%238B45C7' stroke-width='2' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+}
+
+.quick-source-select:hover {
+    border-color: #8B45C7;
+    background: rgba(139, 69, 199, 0.1);
+}
+
+/* --- USUARIO / BOTONES --- */
+.auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.nav-text {
+    color: #2D1B69;
+    font-weight: 500;
+}
+
+.btn-register {
+    background: linear-gradient(135deg, #8B45C7, #A855C7);
+    color: white;
+    text-decoration: none;
+    border-radius: 25px;
+    font-weight: 600;
+    padding: 0.6rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.btn-register:hover {
+    background: #8B45C7;
+    transform: translateY(-1px);
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 992px) {
+    .nav-container {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1rem;
+        text-align: center;
+    }
+
+    .nav-section {
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .nav-links {
+        flex-wrap: wrap;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .quick-source-switcher {
+        order: 3;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .auth-buttons {
+        order: 4;
+        width: 100%;
+        justify-content: center;
+    }
+}
+
     </style>
-   {% block extra_css %}
-  {% load static %}
-  <link rel="stylesheet" href="{% static 'css/result_viewer.css' %}">
+    {% block extra_css %}
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/result_viewer.css' %}">
 {% endblock %}
     <!-- Add Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-KyZXEAg3QhqLMpG8r+Knujsl5+5hb7ie1l1l5Z5e5e5e5e5e5e5e5e5e5e5e5e5" crossorigin="anonymous">
@@ -446,18 +810,86 @@
                     <li><a href="#funcionalities">Functionalities</a></li>
                     {% else %}
                     {% if user.is_authenticated %}
-                    <li><a href="{% url 'upload_file' %}">Upload file</a></li>
                     <li><a href="{% url 'dashboard' %}">View upload files</a></li>
                     <li><a href="{% url 'connect_db' %}">Connect DB</a></li>
-                    <li><a href="{% url 'connections_list' %}">Connections</a></li>
-                    <li><a href="{% url 'favorite_questions' %}">Favorite Questions</a></li>
-                    <li><a href="{% url 'history' %}">History</a></li>
-                    {% else %}
-                    {% endif %}
-                    {% endif %}
-                    {% endif %}
-                </ul>
-            </nav>
+
+<!-- Dropdown para Manage -->
+                    <li class="dropdown">
+                        <div class="dropdown-toggle">
+                            <span>Manage</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                        <div class="dropdown-menu">
+                            <a href="{% url 'connections_list' %}">
+                                <span class="dropdown-icon">🔗</span>
+                                <span>Connections</span>
+                            </a>
+                            <a href="{% url 'data_sources' %}">
+                                <span class="dropdown-icon">📊</span>
+                                <span>Data Sources</span>
+                            </a>
+                            <a href="{% url 'upload_file' %}">
+                                <span class="dropdown-icon">↕️</span>
+                                <span>Upload file</span>
+                            </a>
+                            <a href="{% url 'history' %}">
+                                <span class="dropdown-icon">📜</span>
+                                <span>History</span>
+                            </a>
+                        </div>
+                    </li>
+
+                    <li><a href="{% url 'favorite_questions' %}">Favorites</a></li>
+                                        {% else %}
+                                        {% endif %}
+                                        {% endif %}
+                                        {% endif %}
+                                    </ul>
+                                </nav>
+            
+            <!-- Quick Source Switcher - NUEVO COMPONENTE -->
+            {% if user.is_authenticated and request.resolver_match.url_name != 'home' and request.resolver_match.url_name != 'login' and request.resolver_match.url_name != 'register' %}
+            <div class="quick-source-switcher">
+                <form method="POST" action="{% url 'quick_switch' %}" id="quick-switch-form">
+                    {% csrf_token %}
+                    <label for="quick-source-select" class="sr-only">Quick switch data source</label>
+                    <select name="source_id" id="quick-source-select" class="quick-source-select" onchange="handleQuickSwitch(this)">
+                        <option value="">📊 Switch Source...</option>
+                        
+                        {% comment "Obtener fuentes del usuario" %}
+                        {% with uploaded_files=user.uploaded_files.all|slice:":5" db_connections=user.data_sources.all|slice:":5" %}
+                            
+                            {% if uploaded_files %}
+                            <optgroup label="📁 Recent Files">
+                                {% for file in uploaded_files %}
+                                <option value="{{ file.id }}" data-type="file">
+                                    {{ file.name|truncatechars:35 }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            
+                            {% if db_connections %}
+                            <optgroup label="🗄️ Databases">
+                                {% for db in db_connections %}
+                                <option value="{{ db.id }}" data-type="db" {% if db.is_active %}selected{% endif %}>
+                                    {{ db.name|truncatechars:35 }} {% if db.is_active %}⭐{% endif %}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+                            
+                        {% endwith %}
+                        {% endcomment %}
+                        
+                        <option value="" disabled>──────────</option>
+                        <option value="view-all" data-type="view-all">View All Sources...</option>
+                    </select>
+                    <input type="hidden" name="source_type" id="quick-source-type">
+                </form>
+            </div>
+            {% endif %}
+            
             <div class="auth-buttons">
            {% if user.is_authenticated %}
     <div class="user-info">
@@ -497,7 +929,7 @@
                 <div class="hero-visual">
                     <div class="floating-cards-container">
                         <div class="floating-card">
-                            <div class="card-icon">📊</div>
+                            <div class="card-icon"></div>
                             <div class="card-content">
                                 <h3 class="card-title">Analytics</h3>
                                 <p class="card-description">Visualize your data with interactive charts and customizable dashboards</p>
@@ -551,7 +983,7 @@
             <div class="features-grid">
                 <a href="{% url 'upload_file' %}" style="text-decoration: none;">
                 <div class="feature-card">
-                    <div class="feature-icon">🔄</div>
+                    <div class="feature-icon">📄</div>
                     <h3 class="feature-title">Upload your files</h3>
                 </div>
                 </a>
@@ -567,6 +999,13 @@
                     <h3 class="feature-title">Connect Databases</h3>
                 </div>
                 </a>
+                <!-- NUEVA FUNCIONALIDAD -->
+                <a href="{% url 'data_sources' %}" style="text-decoration: none;">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3 class="feature-title">Manage Data Sources</h3>
+                </div>
+                </a>
             </div>
         </section>
         {% else %}
@@ -575,7 +1014,7 @@
             <div class="features-grid">
                 <a href="{% url 'login' %}" style="text-decoration: none;">
                 <div class="feature-card">
-                    <div class="feature-icon">🔄</div>
+                    <div class="feature-icon">📄</div>
                     <h3 class="feature-title">Upload your files</h3>
                 </div>
                 </a>
@@ -624,6 +1063,28 @@
     {% block extra_js %}{% endblock %}
 
     <script>
+        // Función para manejar el cambio rápido de fuente
+        function handleQuickSwitch(select) {
+            const selectedOption = select.options[select.selectedIndex];
+            const value = selectedOption.value;
+            const sourceType = selectedOption.getAttribute('data-type');
+
+            // Si selecciona "View All Sources"
+            if (sourceType === 'view-all') {
+                window.location.href = "{% url 'data_sources' %}";
+                return false;
+            }
+
+            // Si no seleccionó nada
+            if (!value) {
+                return false;
+            }
+
+            // Actualizar campo oculto y enviar formulario
+            document.getElementById('quick-source-type').value = sourceType || '';
+            document.getElementById('quick-switch-form').submit();
+        }
+
         // Smooth scrolling for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {

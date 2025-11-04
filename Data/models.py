@@ -20,13 +20,25 @@ class CustomUser(AbstractUser):
 
 # Modelo de consultas (Query)
 class Query(models.Model):
+    LLM_CHOICES = (
+        ("gemini", "Google Gemini"),
+        ("huggingface", "Hugging Face"),
+        ("openrouter", "OpenRouter"),
+    )
+    
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     query_text = models.TextField()
     ai_response = models.TextField()
+    llm_model = models.CharField(
+        max_length=20,
+        choices=LLM_CHOICES,
+        default="gemini",
+        help_text="LLM model used for this query"
+    )
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Query by {self.user.username} at {self.timestamp}"
+        return f"Query by {self.user.username} at {self.timestamp} (Model: {self.llm_model})"
 
 
 class FavoriteQuestion(models.Model):

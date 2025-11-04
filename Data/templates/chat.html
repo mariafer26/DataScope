@@ -88,12 +88,102 @@ form button:disabled {
 .data-table tr:nth-child(even) {
   background-color: #f9f9f9;
 }
+
+/* LLM Selector Styles */
+.llm-selector {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border-radius: 12px;
+  border: 1px solid #c4b5fd;
+}
+
+.llm-selector h3 {
+  margin: 0 0 0.8rem 0;
+  color: #2D1B69;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.llm-selector-form {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.llm-selector select {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.6rem 1rem;
+  border: 2px solid #2D1B69;
+  border-radius: 8px;
+  background-color: white;
+  color: #2D1B69;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.llm-selector select:hover {
+  border-color: #8B45C7;
+  box-shadow: 0 2px 8px rgba(139, 69, 199, 0.2);
+}
+
+.llm-selector select:focus {
+  outline: none;
+  border-color: #8B45C7;
+  box-shadow: 0 0 0 3px rgba(139, 69, 199, 0.1);
+}
+
+.llm-selector button {
+  padding: 0.6rem 1.5rem;
+  background: linear-gradient(135deg, #2D1B69, #8B45C7);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(45, 27, 105, 0.3);
+}
+
+.llm-selector button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(45, 27, 105, 0.4);
+}
+
+.current-model {
+  font-size: 0.85rem;
+  color: #6B46C1;
+  font-weight: 500;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="chat-container">
   <h2 style="color:#2D1B69;">Chat with DataScope</h2>
+
+  <!-- LLM Selector -->
+  <div class="llm-selector">
+    <h3>🤖 AI Model Selection</h3>
+    <form method="POST" class="llm-selector-form">
+      {% csrf_token %}
+      <select name="selected_llm" id="llm-select">
+        {% for value, label in llm_choices %}
+          <option value="{{ value }}" {% if value == selected_llm %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+      <button type="submit" name="change_llm">Change Model</button>
+      <span class="current-model">Current: {{ selected_llm|title }}</span>
+    </form>
+  </div>
 
   <div id="chat-box">
     {% for msg in chat_history %}

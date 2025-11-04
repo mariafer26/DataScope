@@ -466,6 +466,9 @@ def ask_chat_view(request, source_type, source_id):
     source_id: id del UploadedFile o DataSource
     """
     initial_question = request.GET.get("question", "")
+    
+    # Obtener el modelo LLM seleccionado de la sesión (default: gemini)
+    selected_llm = request.session.get("selected_llm", "gemini")
 
     # --- Determinar fuente ---
     if source_type == "file":
@@ -495,8 +498,16 @@ def ask_chat_view(request, source_type, source_id):
         })
         request.session[session_key] = chat_history
 
+    # --- Cambio de modelo LLM ---
+    if request.method == "POST" and "change_llm" in request.POST:
+        new_llm = request.POST.get("selected_llm", "gemini")
+        request.session["selected_llm"] = new_llm
+        
+        messages.success(request, f"LLM model changed to: {new_llm}")
+        return redirect("ask_chat", source_type=source_kind, source_id=source_id)
+
     # --- Procesar pregunta del usuario ---
-    if request.method == "POST":
+    if request.method == "POST" and "question" in request.POST:
         print("==== POST RECIBIDO ====")
         question = request.POST.get("question", "").strip()
         if question:
@@ -530,12 +541,12 @@ def ask_chat_view(request, source_type, source_id):
                     if any(k in question.lower() for k in ["resumen", "summary", "analiza", "analyze"]):
                         summaries = []
                         for tabla in tablas_cargadas:
-                            s = ai_services.get_summary_from_data(tabla)
+                            s = ai_services.get_summary_from_data_unified(tabla, selected_llm)
                             summaries.append(f"**{tabla}**:\n{s}")
                         answer = "\n\n".join(summaries)
                     else:
-                        sql_query = ai_services.get_sql_from_question(
-                            f"{context_prompt}\n{question}", tablas_cargadas[0]
+                        sql_query = ai_services.get_sql_from_question_unified(
+                            f"{context_prompt}\n{question}", tablas_cargadas[0], selected_llm
                         )
                         if sql_query == "__NLP_ERROR__":
                             bot_msg = {
@@ -564,7 +575,7 @@ def ask_chat_view(request, source_type, source_id):
                         answer = result if result else "No se encontraron resultados."
 
                 else:
-                    answer = ai_services.get_response_from_external_db(question, source)
+                    answer = ai_services.get_response_from_external_db(question, source, selected_llm)
 
                 if isinstance(answer, list) and len(answer) > 0 and isinstance(answer[0], dict):
                     bot_msg = {
@@ -583,7 +594,7 @@ def ask_chat_view(request, source_type, source_id):
 
                 chat_history.append(bot_msg)
                 from .views import log_query
-                log_query(request.user, question, bot_msg["text"] or bot_msg["data"])
+                log_query(request.user, question, bot_msg["text"] or bot_msg["data"], selected_llm)
 
             except Exception as e:
                 bot_msg = {
@@ -595,7 +606,7 @@ def ask_chat_view(request, source_type, source_id):
                          
                 chat_history.append(bot_msg)
                 from .views import log_query
-                log_query(request.user, question, bot_msg["text"] or bot_msg["data"])
+                log_query(request.user, question, bot_msg["text"] or bot_msg["data"], selected_llm)
 
             finally:
                 if source_kind == "file" and "engine" in locals() and "tablas_cargadas" in locals():
@@ -623,6 +634,12 @@ def ask_chat_view(request, source_type, source_id):
         "source_type": source_kind,
         "chat_history": chat_history,
         "initial_question": initial_question,
+        "selected_llm": selected_llm,
+        "llm_choices": [
+            ("gemini", "Google Gemini"),
+            ("huggingface", "Hugging Face"),
+            ("openrouter", "OpenRouter"),
+        ],
     })
 
 
@@ -1030,9 +1047,17 @@ def use_favorite_question_view(request, question_id):
     return redirect("dashboard")
 
 
-def log_query(user, question, result):
+def log_query(user, question, result, llm_model="gemini"):
     """Guarda en BD cada pregunta y su respuesta resumida."""
     if user.is_authenticated:
+        from .models import Query
+        Query.objects.create(
+            user=user,
+            query_text=question,
+            ai_response=str(result)[:400],
+            llm_model=llm_model
+        )
+        # También guardar en QueryHistory para mantener compatibilidad
         QueryHistory.objects.create(
             user=user,
             question=question,

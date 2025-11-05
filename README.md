@@ -63,3 +63,11 @@ http://127.0.0.1:8000
 
 - Ensure that the `db.sqlite3` file is present in the root directory for database functionality. If not, create it by running the migrations step.
 - If you encounter issues, check the installed Python version and dependencies.
+
+
+## Documentation
+
+For the complete user guide, please refer to the [User Manual](./docs/USER_MANUAL.md).
+
+The manual includes detailed explanations of all functionalities, along with 19 verified screenshots covering registration, login, uploads, visualizations, database connections, and AI chat.
+

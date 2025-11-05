@@ -3,11 +3,12 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .forms import UploadFileForm, DBConnectionForm, FavoriteQuestionForm
-from .models import UploadedFile, DataSource, FavoriteQuestion, QueryHistory
+from .models import UploadedFile, DataSource, FavoriteQuestion, QueryHistory, LLMMetrics
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
 import os
+import time
 import pandas as pd
 import json
 import re
@@ -27,6 +28,9 @@ from django.core.paginator import Paginator
 from xhtml2pdf import pisa
 import io
 import base64
+import json
+import numpy as np
+from datetime import datetime
 from django.contrib.staticfiles import finders
 from .tables import (
     get_table_names_from_source,
@@ -133,6 +137,223 @@ def _sanitize_table_name(name):
     return name
 
 
+def build_chart_config_from_df(df: pd.DataFrame) -> dict | None:
+    """
+    Construye una config de Chart.js 'inteligente' según el DataFrame:
+      - Si hay fechas: elige la mejor columna datetime, la mejor numérica (por varianza)
+        y agrega por frecuencia adaptativa (D, W o M) según el rango total.
+      - Si hay categórica + numérica: agrega y muestra TOP_N; el resto como 'Others'.
+        Si categorías <= 6 => pie, si no => bar.
+      - Si solo hay categórica: conteo de ocurrencias (TOP_N + 'Others').
+    Devuelve None si no hay nada dibujable.
+    """
+    if df is None or df.empty:
+        return None
+
+    dfx = df.copy()
+
+    # --- 1) Parseo agresivo de posibles fechas en columnas de tipo object ---
+    for col in dfx.columns:
+        if dfx[col].dtype == object:
+            try:
+                parsed = pd.to_datetime(dfx[col], errors="raise", infer_datetime_format=True, utc=False)
+                dfx[col] = pd.to_datetime(dfx[col], errors="coerce")
+            except Exception:
+                pass
+
+    # --- 2) Identificar tipos ---
+    num_cols = [c for c in dfx.columns if pd.api.types.is_numeric_dtype(dfx[c])]
+    dt_cols  = [c for c in dfx.columns if pd.api.types.is_datetime64_any_dtype(dfx[c])]
+
+    # Categóricas candidatas: cardinalidad moderada (<= 50) y no num/dt
+    cat_cols = []
+    for c in dfx.columns:
+        if c in num_cols or c in dt_cols:
+            continue
+        nunique = dfx[c].nunique(dropna=True)
+        if 0 < nunique <= 50:
+            cat_cols.append((c, nunique))
+    # ordenar por cardinalidad ascendente (prioriza más compactas)
+    cat_cols = [c for c, _ in sorted(cat_cols, key=lambda x: x[1])]
+
+    # Helper: elegir mejor columna numérica por varianza (informativa)
+    def best_numeric(cols):
+        if not cols:
+            return None
+        if len(cols) == 1:
+            return cols[0]
+        variances = []
+        for c in cols:
+            s = dfx[c].dropna().astype(float)
+            variances.append((c, float(s.var()) if len(s) else -1.0))
+        variances.sort(key=lambda x: x[1], reverse=True)
+        return variances[0][c := 0]  # devuelve nombre con mayor varianza
+
+    # Helper: elegir mejor datetime por número de valores no nulos
+    def best_datetime(cols):
+        if not cols:
+            return None
+        if len(cols) == 1:
+            return cols[0]
+        scores = []
+        for c in cols:
+            s = dfx[c].dropna()
+            scores.append((c, int(s.shape[0])))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[0][0]
+
+    # --- 3) Caso serie temporal ---
+    if dt_cols and num_cols:
+        tcol = best_datetime(dt_cols)
+        ncol = best_numeric(num_cols)
+        if tcol and ncol:
+            tmp = dfx[[tcol, ncol]].dropna()
+            if not tmp.empty:
+                # Rango para decidir frecuencia
+                tmin, tmax = tmp[tcol].min(), tmp[tcol].max()
+                if isinstance(tmin, pd.Timestamp) and isinstance(tmax, pd.Timestamp):
+                    total_days = (tmax - tmin).days if pd.notna(tmax) and pd.notna(tmin) else None
+                else:
+                    total_days = None
+
+                if total_days is None:
+                    freq = "D"
+                elif total_days <= 45:
+                    freq = "D"
+                elif total_days <= 360:
+                    freq = "W"
+                else:
+                    freq = "M"
+
+                agg = (
+                    tmp.set_index(tcol)
+                       .groupby(pd.Grouper(freq=freq))[ncol]
+                       .sum()
+                       .reset_index()
+                       .dropna()
+                )
+                if agg.empty:
+                    return None
+
+                # Etiquetas legibles según freq
+                if freq == "D":
+                    labels = agg[tcol].dt.strftime("%Y-%m-%d").tolist()
+                elif freq == "W":
+                    labels = agg[tcol].dt.strftime("W%U %Y").tolist()
+                else:  # "M"
+                    labels = agg[tcol].dt.strftime("%Y-%m").tolist()
+
+                data = agg[ncol].astype(float).round(2).tolist()
+
+                return {
+                    "type": "line",
+                    "data": {
+                        "labels": labels,
+                        "datasets": [{
+                            "label": f"{ncol} over time",
+                            "data": data,
+                            "tension": 0.25,
+                            "pointRadius": 2,
+                            "borderWidth": 2,
+                            # sin colores fijos, Chart.js pondrá los suyos
+                        }]
+                    },
+                    "options": {
+                        "responsive": True,
+                        "maintainAspectRatio": False,  # usamos nuestro alto de CSS
+                        "plugins": {
+                            "legend": {"display": True},
+                            "tooltip": {"mode": "index", "intersect": False}
+                        },
+                        "scales": {
+                            "x": {"title": {"display": True, "text": str(tcol)}},
+                            "y": {"title": {"display": True, "text": str(ncol)}, "beginAtZero": True}
+                        }
+                    }
+                }
+
+    # --- 4) Categórica + numérica ---
+    if cat_cols and num_cols:
+        ccol = cat_cols[0]
+        ncol = best_numeric(num_cols) or num_cols[0]
+        tmp = dfx[[ccol, ncol]].dropna()
+        if not tmp.empty:
+            agg = tmp.groupby(ccol, dropna=True)[ncol].sum().reset_index()
+            if agg.empty:
+                return None
+            agg = agg.sort_values(ncol, ascending=False)
+
+            TOP_N = 10
+            MAX_PIE = 6
+
+            top = agg.head(TOP_N).copy()
+            if len(agg) > TOP_N:
+                others_val = float(agg.iloc[TOP_N:][ncol].sum())
+                top = pd.concat([top, pd.DataFrame({ccol: ["Others"], ncol: [others_val]})], ignore_index=True)
+
+            labels = top[ccol].astype(str).tolist()
+            data = top[ncol].astype(float).round(2).tolist()
+
+            if len(labels) <= MAX_PIE:
+                chart_type = "pie"
+                options = {"responsive": True, "plugins": {"legend": {"display": True}}}
+            else:
+                chart_type = "bar"
+                options = {
+                    "responsive": True,
+                    "maintainAspectRatio": False,
+                    "plugins": {"legend": {"display": True}},
+                    "scales": {
+                        "x": {"title": {"display": True, "text": str(ccol)}},
+                        "y": {"title": {"display": True, "text": str(ncol)}, "beginAtZero": True}
+                    }
+                }
+
+            return {
+                "type": chart_type,
+                "data": {"labels": labels, "datasets": [{"label": f"{ncol} by {ccol}", "data": data}]},
+                "options": options
+            }
+
+    # --- 5) Solo categórica => conteo ---
+    if cat_cols and not num_cols:
+        ccol = cat_cols[0]
+        counts = dfx[ccol].dropna().astype(str).value_counts()
+        if counts.empty:
+            return None
+
+        TOP_N = 10
+        MAX_PIE = 6
+
+        labels = counts.index.tolist()
+        values = counts.values.tolist()
+
+        if len(labels) > TOP_N:
+            top_labels = labels[:TOP_N]
+            top_vals = values[:TOP_N]
+            others = sum(values[TOP_N:])
+            top_labels.append("Others")
+            top_vals.append(others)
+            labels, values = top_labels, top_vals
+
+        chart_type = "pie" if len(labels) <= MAX_PIE else "bar"
+        options = {
+            "responsive": True,
+            "maintainAspectRatio": False,
+            "plugins": {"legend": {"display": True}},
+        }
+        if chart_type == "bar":
+            options["scales"] = {"x": {"title": {"display": True, "text": str(ccol)}},
+                                 "y": {"beginAtZero": True}}
+
+        return {
+            "type": chart_type,
+            "data": {"labels": labels, "datasets": [{"label": f"Count by {ccol}", "data": values}]},
+            "options": options
+        }
+
+    return None
+
 def upload_file_view(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
@@ -174,6 +395,8 @@ def analyze_file_view(request, file_id):
     answer = None
     error = ""
     stats_checked = False
+    # ---  valores por defecto para la gráfica ---
+    chart_json = None 
 
     try:
         if ext == ".csv":
@@ -243,6 +466,10 @@ def analyze_file_view(request, file_id):
             for c in df.columns
         ]
 
+         # --- NUEVO: construir configuración para Chart.js ---
+        chart_cfg = build_chart_config_from_df(df)
+        chart_json = json.dumps(chart_cfg) if chart_cfg else None
+
     except Exception as e:
         messages.error(request, f"Error processing file: {str(e)}")
         error = str(e)
@@ -259,6 +486,9 @@ def analyze_file_view(request, file_id):
             "result": None,
             "loading": False,
             "error": error,
+            "chart_config": chart_json,          #
+            "is_csv": (ext == ".csv"),           # 
+            "is_database": False,                #
         },
     )
 
@@ -278,11 +508,14 @@ def ask_chat_view(request, source_type, source_id):
     source_id: id del UploadedFile o DataSource
     """
     initial_question = request.GET.get("question", "")
+    
+    # Obtener el modelo LLM seleccionado de la sesión (default: gemini)
+    selected_llm = request.session.get("selected_llm", "gemini")
 
     # --- Determinar fuente ---
     if source_type == "file":
         source = get_object_or_404(UploadedFile, id=source_id, user=request.user)
-        source_label = f"Archivo: {source.name}"
+        source_label = f"File: {source.name}"
         source_kind = "file"
     elif source_type == "db":
         source = get_object_or_404(DataSource, id=source_id, user=request.user)
@@ -299,17 +532,34 @@ def ask_chat_view(request, source_type, source_id):
         chat_history.append({
             "sender": "bot",
             "text": (
-                f"¡Hola! Estás conectado a {source_label}. "
-                "Puedes hacerme preguntas sobre los datos, generar resúmenes o ejecutar análisis."
+                f"Hello! You are connected to file: {source_label}. "
+                "You can ask questions about the data, generate summaries, or run analysis."
             ),
             "is_json": False,
             "data": []
         })
         request.session[session_key] = chat_history
 
+    # --- Cambio de modelo LLM ---
+    if request.method == "POST" and "change_llm" in request.POST:
+        new_llm = request.POST.get("selected_llm", "gemini")
+        request.session["selected_llm"] = new_llm
+        
+        messages.success(request, f"LLM model changed to: {new_llm}")
+        return redirect("ask_chat", source_type=source_kind, source_id=source_id)
+
     # --- Procesar pregunta del usuario ---
-    if request.method == "POST":
+    if request.method == "POST" and "question" in request.POST:
         print("==== POST RECIBIDO ====")
+        
+        # IMPORTANTE: Obtener el modelo LLM del POST si viene (para requests AJAX)
+        # Si no viene, usar el de la sesión
+        if "current_llm" in request.POST:
+            selected_llm = request.POST.get("current_llm", "gemini")
+            print(f"🔍 Modelo LLM obtenido del POST: {selected_llm}")
+        else:
+            print(f"🔍 Modelo LLM obtenido de sesión: {selected_llm}")
+        
         question = request.POST.get("question", "").strip()
         if question:
             chat_history.append({"sender": "user", "text": question})
@@ -342,23 +592,85 @@ def ask_chat_view(request, source_type, source_id):
                     if any(k in question.lower() for k in ["resumen", "summary", "analiza", "analyze"]):
                         summaries = []
                         for tabla in tablas_cargadas:
-                            s = ai_services.get_summary_from_data(tabla)
+                            s = ai_services.get_summary_from_data_unified(tabla, selected_llm)
                             summaries.append(f"**{tabla}**:\n{s}")
                         answer = "\n\n".join(summaries)
+                        sql_query = None  # No hay SQL en resúmenes
                     else:
-                        sql_query = ai_services.get_sql_from_question(
-                            f"{context_prompt}\n{question}", tablas_cargadas[0]
+                        # Registrar tiempo de inicio
+                        start_time = time.time()
+                        
+                        # Detectar qué tabla se menciona en la pregunta
+                        target_table = tablas_cargadas[0]  # default: primera tabla
+                        question_lower = question.lower()
+                        for tabla in tablas_cargadas:
+                            if tabla.lower() in question_lower:
+                                target_table = tabla
+                                break
+                        
+                        print(f"🎯 Tabla detectada: {target_table}")
+                        
+                        sql_query = ai_services.get_sql_from_question_unified(
+                            f"{context_prompt}\n{question}", target_table, selected_llm
                         )
+                        
+                        # Calcular tiempo de respuesta del LLM
+                        llm_response_time = time.time() - start_time
+                        
+                        if sql_query == "__NLP_ERROR__":
+                            # Registrar métrica de fallo
+                            LLMMetrics.objects.create(
+                                user=request.user,
+                                llm_model=selected_llm,
+                                question=question,
+                                success=False,
+                                sql_generated=None,
+                                response_time=llm_response_time,
+                                result_count=0,
+                                error_message="LLM no pudo generar SQL válido"
+                            )
+                            
+                            bot_msg = {
+                                "sender": "bot",
+                                "text": (
+                                    "🤖 No pude entender tu pregunta.\n\n"
+                                    "💡 Intenta reformularla. Ejemplos:\n"
+                                    "- Total de ventas por mes\n"
+                                    "- Promedio de edad de empleados\n"
+                                    "- Filtrar clientes por país\n"
+                                ),
+                                "is_json": False,
+                                "data": []
+                            }
+                            chat_history.append(bot_msg)
+                            request.session[session_key] = chat_history
+                            request.session.modified = True
+                            return JsonResponse(bot_msg, safe=False)
+                    
                         with connection.cursor() as cursor:
                             cursor.execute(sql_query)
                             columns = [col[0] for col in cursor.description]
                             result = [
                                 dict(zip(columns, row)) for row in cursor.fetchall()
                             ]
+                        
+                        # Registrar métrica de éxito
+                        total_time = time.time() - start_time
+                        LLMMetrics.objects.create(
+                            user=request.user,
+                            llm_model=selected_llm,
+                            question=question,
+                            success=True,
+                            sql_generated=sql_query,
+                            response_time=total_time,
+                            result_count=len(result),
+                            error_message=None
+                        )
+                        
                         answer = result if result else "No se encontraron resultados."
 
                 else:
-                    answer = ai_services.get_response_from_external_db(question, source)
+                    answer = ai_services.get_response_from_external_db(question, source, selected_llm)
 
                 if isinstance(answer, list) and len(answer) > 0 and isinstance(answer[0], dict):
                     bot_msg = {
@@ -377,18 +689,36 @@ def ask_chat_view(request, source_type, source_id):
 
                 chat_history.append(bot_msg)
                 from .views import log_query
-                log_query(request.user, question, bot_msg["text"] or bot_msg["data"])
+                log_query(request.user, question, bot_msg["text"] or bot_msg["data"], selected_llm)
 
             except Exception as e:
+                # Registrar métrica de error
+                if 'start_time' in locals():
+                    error_time = time.time() - start_time
+                else:
+                    error_time = 0
+                
+                LLMMetrics.objects.create(
+                    user=request.user,
+                    llm_model=selected_llm,
+                    question=question,
+                    success=False,
+                    sql_generated=sql_query if 'sql_query' in locals() else None,
+                    response_time=error_time,
+                    result_count=0,
+                    error_message=str(e)
+                )
+                
                 bot_msg = {
                     "sender": "bot",
-                    "text": f"⚠ Error: {str(e)}",
+                    "text": f"❌ Ocurrió un error al procesar tu solicitud: {str(e)}",
                     "is_json": False,
                     "data": []
                 }
+                         
                 chat_history.append(bot_msg)
                 from .views import log_query
-                log_query(request.user, question, bot_msg["text"] or bot_msg["data"])
+                log_query(request.user, question, bot_msg["text"] or bot_msg["data"], selected_llm)
 
             finally:
                 if source_kind == "file" and "engine" in locals() and "tablas_cargadas" in locals():
@@ -416,6 +746,12 @@ def ask_chat_view(request, source_type, source_id):
         "source_type": source_kind,
         "chat_history": chat_history,
         "initial_question": initial_question,
+        "selected_llm": selected_llm,
+        "llm_choices": [
+            ("gemini", "Google Gemini"),
+            ("huggingface", "Hugging Face"),
+            ("openrouter", "OpenRouter"),
+        ],
     })
 
 
@@ -423,6 +759,61 @@ def ask_chat_view(request, source_type, source_id):
 def dashboard_view(request):
     files = UploadedFile.objects.filter(user=request.user)
     return render(request, "dashboard.html", {"files": files})
+
+
+@login_required
+def llm_comparison_view(request):
+    """
+    Vista para comparar la precisión y rendimiento de los diferentes modelos LLM
+    """
+    from django.db.models import Count, Avg, Q
+    
+    # Obtener métricas del usuario actual
+    user_metrics = LLMMetrics.objects.filter(user=request.user)
+    
+    # Estadísticas por modelo
+    stats_by_model = {}
+    for model_code, model_name in LLMMetrics.LLM_CHOICES:
+        model_metrics = user_metrics.filter(llm_model=model_code)
+        total_queries = model_metrics.count()
+        
+        if total_queries > 0:
+            successful = model_metrics.filter(success=True).count()
+            failed = model_metrics.filter(success=False).count()
+            success_rate = (successful / total_queries) * 100
+            avg_response_time = model_metrics.aggregate(Avg('response_time'))['response_time__avg'] or 0
+            avg_results = model_metrics.filter(success=True).aggregate(Avg('result_count'))['result_count__avg'] or 0
+            
+            stats_by_model[model_code] = {
+                'name': model_name,
+                'total': total_queries,
+                'successful': successful,
+                'failed': failed,
+                'success_rate': round(success_rate, 2),
+                'avg_response_time': round(avg_response_time, 3),
+                'avg_results': round(avg_results, 1)
+            }
+    
+    # Últimas consultas con detalles
+    recent_queries = user_metrics.order_by('-timestamp')[:20]
+    
+    # Errores comunes por modelo
+    common_errors = {}
+    for model_code, model_name in LLMMetrics.LLM_CHOICES:
+        errors = user_metrics.filter(
+            llm_model=model_code, 
+            success=False, 
+            error_message__isnull=False
+        ).values('error_message').annotate(count=Count('error_message')).order_by('-count')[:5]
+        common_errors[model_code] = errors
+    
+    context = {
+        'stats_by_model': stats_by_model,
+        'recent_queries': recent_queries,
+        'common_errors': common_errors,
+    }
+    
+    return render(request, "llm_comparison.html", context)
 
 
 @login_required
@@ -633,8 +1024,8 @@ def analyze_db_view(request, db_id):
         request.session["last_upload_context"] = {
             "file_name": ds.name,
             "generated_at": timezone.now().strftime("%Y-%m-%d %H:%M"),
-            "table_html": table_html,
-            "stats": stats,
+            "table_html": table_html or "",
+            "stats": stats or {},
         }
 
         # Renderizar plantilla
@@ -823,9 +1214,17 @@ def use_favorite_question_view(request, question_id):
     return redirect("dashboard")
 
 
-def log_query(user, question, result):
+def log_query(user, question, result, llm_model="gemini"):
     """Guarda en BD cada pregunta y su respuesta resumida."""
     if user.is_authenticated:
+        from .models import Query
+        Query.objects.create(
+            user=user,
+            query_text=question,
+            ai_response=str(result)[:400],
+            llm_model=llm_model
+        )
+        # También guardar en QueryHistory para mantener compatibilidad
         QueryHistory.objects.create(
             user=user,
             question=question,

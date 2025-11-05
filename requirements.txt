@@ -13,3 +13,4 @@ xhtml2pdf==0.2.17
 reportlab
 pytest
 ujson>=5.8.0
+requests

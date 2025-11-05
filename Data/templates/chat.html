@@ -88,12 +88,151 @@ form button:disabled {
 .data-table tr:nth-child(even) {
   background-color: #f9f9f9;
 }
+
+/* LLM Selector Styles */
+.llm-selector {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border-radius: 12px;
+  border: 1px solid #c4b5fd;
+}
+
+.llm-selector h3 {
+  margin: 0 0 0.8rem 0;
+  color: #2D1B69;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.llm-selector-form {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.llm-selector select {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.6rem 1rem;
+  border: 2px solid #2D1B69;
+  border-radius: 8px;
+  background-color: white;
+  color: #2D1B69;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.llm-selector select:hover {
+  border-color: #8B45C7;
+  box-shadow: 0 2px 8px rgba(139, 69, 199, 0.2);
+}
+
+.llm-selector select:focus {
+  outline: none;
+  border-color: #8B45C7;
+  box-shadow: 0 0 0 3px rgba(139, 69, 199, 0.1);
+}
+
+.llm-selector button {
+  padding: 0.6rem 1.5rem;
+  background: linear-gradient(135deg, #2D1B69, #8B45C7);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(45, 27, 105, 0.3);
+}
+
+.llm-selector button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(45, 27, 105, 0.4);
+}
+
+.current-model {
+  font-size: 0.85rem;
+  color: #6B46C1;
+  font-weight: 500;
+}
+
+/* AI Disclaimer Styles */
+.ai-disclaimer {
+  margin: 1.5rem 0;
+  padding: 1rem 1.2rem;
+  background: linear-gradient(135deg, #fff8dc 0%, #ffe4b5 100%);
+  border-left: 4px solid #ff9800;
+  border-radius: 8px;
+  display: flex;
+  align-items: start;
+  gap: 0.8rem;
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.15);
+}
+
+.ai-disclaimer-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.ai-disclaimer-content {
+  flex: 1;
+}
+
+.ai-disclaimer-title {
+  margin: 0 0 0.3rem 0;
+  font-weight: 700;
+  color: #e65100;
+  font-size: 0.95rem;
+}
+
+.ai-disclaimer-text {
+  margin: 0;
+  color: #5d4037;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="chat-container">
   <h2 style="color:#2D1B69;">Chat with DataScope</h2>
+
+  <!-- AI Disclaimer -->
+  <div class="ai-disclaimer">
+    <div class="ai-disclaimer-icon">⚠️</div>
+    <div class="ai-disclaimer-content">
+      <p class="ai-disclaimer-title">AI-Generated Content Notice</p>
+      <p class="ai-disclaimer-text">
+        This AI assistant may make mistakes or provide inaccurate information. 
+        Please verify important data and critical decisions independently. 
+        The accuracy may vary between different AI models.
+      </p>
+    </div>
+  </div>
+
+  <!-- LLM Selector -->
+  <div class="llm-selector">
+    <h3>🤖 AI Model Selection</h3>
+    <form method="POST" class="llm-selector-form">
+      {% csrf_token %}
+      <select name="selected_llm" id="llm-select">
+        {% for value, label in llm_choices %}
+          <option value="{{ value }}" {% if value == selected_llm %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+      <button type="submit" name="change_llm">Change Model</button>
+      <span class="current-model">Current: {{ selected_llm|title }}</span>
+    </form>
+  </div>
 
   <div id="chat-box">
     {% for msg in chat_history %}
@@ -168,6 +307,10 @@ form.addEventListener("submit", async (e) => {
     const formData = new FormData();
     formData.append("question", question);
     formData.append("csrfmiddlewaretoken", document.querySelector("[name=csrfmiddlewaretoken]").value);
+    
+    // IMPORTANTE: Enviar el modelo LLM seleccionado
+    const selectedModel = document.querySelector('select[name="selected_llm"]').value;
+    formData.append("current_llm", selectedModel);
 
     const response = await fetch("{% url 'ask_chat' source_type=source_type source_id=source.id %}", {
     method: "POST",
@@ -195,7 +338,22 @@ form.addEventListener("submit", async (e) => {
       table += `</tbody></table>`;
       loadingMsg.innerHTML = table;
     } else {
-      loadingMsg.innerHTML = `<p>${data.text}</p>`;
+      if (data.text && data.text.includes("No pude entender tu pregunta")) {
+  loadingMsg.innerHTML = `
+    <p>🤖 I couldn't understand your question.</p>
+    <div style="margin-top: 10px; padding: 10px; background:#fff8e1; border-left:4px solid #ff9800; border-radius:6px;">
+        <strong>💡Try asking:</strong>
+        <ul style="margin-top:8px; padding-left:18px;">
+            <li> Total sales by month</li>
+            <li>Average employee age</li>
+            <li>Filter customers by country</li>
+        </ul>
+    </div>
+  `;
+} else {
+  loadingMsg.innerHTML = `<p>${data.text}</p>`;
+}
+
     }
 
   } catch (error) {

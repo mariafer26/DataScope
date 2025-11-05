@@ -100,7 +100,7 @@ def get_sql_from_question(question: str, table_name: str, engine_type="sqlite") 
         Generate a valid SQL query to answer the question.
         Prefer using the table "{table_name}" if it is relevant.
 
-        Return only the SQL query, no explanation.
+        Return only the SQL query or the explanation if required.
         """
 
         response = model.generate_content(prompt)

@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, text
 load_dotenv()
 
 # Configure the API key
-# Make sure to set the GOOGLE_API_KEY environment variable
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 # API keys for other LLMs
@@ -19,54 +18,94 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_MODEL_ID = os.environ.get("OPENROUTER_MODEL_ID", "deepseek/deepseek-v3-0324:free")
 
 
-def get_sql_from_question(question: str, table_name: str) -> str:
-    """
-    Generates an SQL query from a natural language question using Google's Generative AI.
-    Only uses tables within the same temporary database created for the uploaded file.
-    """
-    try:
-        model = genai.GenerativeModel("models/gemini-2.5-pro")
+# ==================== HELPER FUNCTIONS ====================
 
-        # Validación básica: la pregunta debe tener al menos 3 palabras
-        if len(question.split()) < 3:
-            print(f"❌ Pregunta muy corta: {question}")
-            return "__NLP_ERROR__"
-        
-        # Obtener todas las tablas dentro de la misma base (no las globales del sistema)
-        with connection.cursor() as cursor:
+def get_tables_and_columns(engine_type="sqlite"):
+    """
+    Obtiene todas las tablas y sus columnas dependiendo del motor de base de datos.
+    """
+    tables = []
+    schemas = []
+
+    with connection.cursor() as cursor:
+        if engine_type == "sqlite":
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [row[0] for row in cursor.fetchall()]
-
-        # Construir esquema de todas las tablas dentro de esa base
-        schemas = []
-        with connection.cursor() as cursor:
             for t in tables:
                 cursor.execute(f"PRAGMA table_info('{t}');")
                 cols = cursor.fetchall()
                 if cols:
                     col_list = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
                     schemas.append(f"Table {t}: {col_list}")
+        elif engine_type == "postgresql":
+            # Obtener tablas
+            cursor.execute("""
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+            """)
+            tables = [row[0] for row in cursor.fetchall()]
+            for t in tables:
+                cursor.execute("""
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name = %s
+                    ORDER BY ordinal_position;
+                """, [t])
+                cols = cursor.fetchall()
+                if cols:
+                    col_list = ", ".join([f"{c[0]} ({c[1]})" for c in cols])
+                    schemas.append(f"Table {t}: {col_list}")
+    return tables, schemas
 
+
+def get_table_schema(table_name: str, engine_type="sqlite"):
+    """
+    Devuelve el esquema de columnas de una tabla.
+    """
+    with connection.cursor() as cursor:
+        if engine_type == "sqlite":
+            cursor.execute(f"PRAGMA table_info('{table_name}');")
+            cols = cursor.fetchall()
+            schema = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
+        elif engine_type == "postgresql":
+            cursor.execute("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = %s
+                ORDER BY ordinal_position;
+            """, [table_name])
+            cols = cursor.fetchall()
+            schema = ", ".join([f"{c[0]} ({c[1]})" for c in cols])
+    return schema
+
+
+# ==================== GEMINI FUNCTIONS ====================
+
+def get_sql_from_question(question: str, table_name: str, engine_type="sqlite") -> str:
+    try:
+        model = genai.GenerativeModel("models/gemini-2.5-pro")
+
+        if len(question.split()) < 3:
+            print(f"❌ Pregunta muy corta: {question}")
+            return "__NLP_ERROR__"
+
+        # Obtener tablas y esquemas
+        tables, schemas = get_tables_and_columns(engine_type)
         schema_text = "\n".join(schemas)
 
         prompt = f"""
-        You are an expert in SQLite.
-        The uploaded file has been imported as a temporary SQLite database.
+        You are an expert in {engine_type}.
         The database contains several tables:
 
         {schema_text}
 
         The user question is about: "{question}"
 
-        Generate a valid SQLite SQL query to answer the question.
-        Prefer using the table "{table_name}" if it is relevant,
-        but you can use other tables if the question explicitly mentions them.
+        Generate a valid SQL query to answer the question.
+        Prefer using the table "{table_name}" if it is relevant.
 
         Return only the SQL query, no explanation.
-
-        Remember, it must be a valid SQL query.
-
-        If a summary is requested, you must access the data and generate the response in natural language.
         """
 
         response = model.generate_content(prompt)
@@ -74,11 +113,9 @@ def get_sql_from_question(question: str, table_name: str) -> str:
         if not sql_query:
             raise ValueError("No SQL returned")
 
-        # Si hay formato markdown, extraer el bloque SQL
         if "```sql" in sql_query.lower():
             sql_query = sql_query.split("```sql")[1].split("```")[0].strip()
 
-        # Si el modelo escribió texto antes del SELECT, limpiarlo
         sql_query = re.sub(
             r"^[\w]*(SELECT|WITH|INSERT|UPDATE|DELETE)",
             r"\1",
@@ -86,94 +123,31 @@ def get_sql_from_question(question: str, table_name: str) -> str:
             flags=re.IGNORECASE,
         )
 
-        # Asegurar que termina con punto y coma
         if not sql_query.strip().endswith(";"):
             sql_query += ";"
 
-
         sql_lower = sql_query.lower().strip()
-
-        invalid_patterns = [
-            "", "null", "none",
-            "table", "column", "schema",
-            "select;", "with;", "pragma;"
-        ]
+        invalid_patterns = ["", "null", "none", "table", "column", "schema", "select;", "with;", "pragma;"]
 
         if any(sql_lower == p for p in invalid_patterns):
             return "__NLP_ERROR__"
 
         if not sql_lower.startswith(("select", "with", "pragma")):
             return "__NLP_ERROR__"
-        # -----------------------------
 
         return sql_query
 
     except Exception as e:
-        error_msg = str(e)
-        
-        # Detectar error de quota de Gemini
-        if "429" in error_msg or "quota" in error_msg.lower():
-            print(f"⚠️ Gemini quota excedida - considera usar OpenRouter o esperar")
-        else:
-            print(f"❌ Error en get_sql_from_question (Gemini): {error_msg}")
-            import traceback
-            traceback.print_exc()
-        
+        print(f"❌ Error en get_sql_from_question (Gemini): {str(e)}")
         return "__NLP_ERROR__"
 
 
-def get_response_from_external_db(question, data_source, model="gemini"):
+def get_summary_from_data(table_name: str, engine_type="sqlite") -> str:
     try:
-        """
-        Ejecuta una consulta SQL en una base de datos externa según el tipo de motor.
-        """
-
-        if data_source.engine == "postgresql":
-            conn_str = f"postgresql://{data_source.username}:{data_source.password}@{data_source.host}:{data_source.port}/{data_source.db_name}"
-        elif data_source.engine == "mysql":
-            conn_str = f"mysql+pymysql://{data_source.username}:{data_source.password}@{data_source.host}:{data_source.port}/{data_source.db_name}"
-        elif data_source.engine == "sqlite":
-            conn_str = f"sqlite:///{data_source.sqlite_path}"
-        else:
-            raise ValueError("Tipo de base de datos no soportado")
-
-        engine = create_engine(conn_str)
-
-        # Usar el modelo LLM seleccionado
-        sql_query = get_sql_from_question_unified(question, None, model)
-
-        with engine.connect() as conn:
-            result = conn.execute(text(sql_query))
-            columns = result.keys()
-            rows = result.fetchall()
-
-        return [dict(zip(columns, row)) for row in rows]
-    except Exception as e:
-        return "__NLP_ERROR__"
-
-
-def get_summary_from_data(table_name: str) -> str:
-    """
-    Generates a summary of the data in the specified table.
-
-    Args:
-        table_name: The name of the table.
-
-    Returns:
-        The generated summary.
-    """
-    try:
-        
         model = genai.GenerativeModel("models/gemini-2.5-pro")
 
-        # Get the table schema
-        with connection.cursor() as cursor:
-            cursor.execute(f"PRAGMA table_info('{table_name}');")
-            columns_info = cursor.fetchall()
+        schema = get_table_schema(table_name, engine_type)
 
-        schema = ", ".join([f"{col[1]} ({col[2]})" for col in columns_info])
-
-        # Get the first 20 rows of data
         with connection.cursor() as cursor:
             cursor.execute(f"SELECT * FROM {table_name} LIMIT 20;")
             columns = [col[0] for col in cursor.description]
@@ -183,7 +157,7 @@ def get_summary_from_data(table_name: str) -> str:
         data = "\n".join([" | ".join(map(str, row)) for row in rows])
 
         prompt = f"""
-        You are a data analyst. Given the following table schema and data, provide a summary of the data.
+        You are a data analyst. Given the following table schema and data, provide a summary.
 
         Table: {table_name}
         Schema: {schema}
@@ -197,9 +171,10 @@ def get_summary_from_data(table_name: str) -> str:
 
         response = model.generate_content(prompt)
         return response.text.strip()
-    except Exception as e:
-        return "__NLP_ERROR__"
 
+    except Exception as e:
+        print(f"❌ Error en get_summary_from_data (Gemini): {str(e)}")
+        return "__NLP_ERROR__"
 
 # ==================== HUGGING FACE FUNCTIONS ====================
 

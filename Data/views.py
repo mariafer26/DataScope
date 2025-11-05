@@ -227,10 +227,10 @@ def build_chart_config_from_df(df: pd.DataFrame) -> dict | None:
 
                 agg = (
                     tmp.set_index(tcol)
-                       .groupby(pd.Grouper(freq=freq))[ncol]
-                       .sum()
-                       .reset_index()
-                       .dropna()
+                        .groupby(pd.Grouper(freq=freq))[ncol]
+                        .sum()
+                        .reset_index()
+                        .dropna()
                 )
                 if agg.empty:
                     return None
@@ -396,7 +396,7 @@ def analyze_file_view(request, file_id):
     error = ""
     stats_checked = False
     # ---  valores por defecto para la gráfica ---
-    chart_json = None 
+    chart_json = None
 
     try:
         if ext == ".csv":
@@ -487,7 +487,7 @@ def analyze_file_view(request, file_id):
             "loading": False,
             "error": error,
             "chart_config": chart_json,          #
-            "is_csv": (ext == ".csv"),           # 
+            "is_csv": (ext == ".csv"),           #
             "is_database": False,                #
         },
     )
@@ -508,7 +508,7 @@ def ask_chat_view(request, source_type, source_id):
     source_id: id del UploadedFile o DataSource
     """
     initial_question = request.GET.get("question", "")
-    
+
     # Obtener el modelo LLM seleccionado de la sesión (default: gemini)
     selected_llm = request.session.get("selected_llm", "gemini")
 

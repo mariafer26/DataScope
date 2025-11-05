@@ -12,8 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-swq)7l-(q)k1pd@#vog6_su#5&g$ob7^_e==m)y9sq+$5b^=_x')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# The 'DYNO' env var is set on Heroku, so this will be False in production.
-DEBUG = os.getenv('DYNO') is None
+# En Heroku, la variable de entorno 'DYNO' está presente.
+DEBUG = os.getenv('DYNO') is None or os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 # Add the future Heroku app URL to ALLOWED_HOSTS
@@ -28,7 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "whitenoise.runserver_nostatic", # Should be before staticfiles
+    "whitenoise.runserver_nostatic",  # Should be before staticfiles
     "django.contrib.staticfiles",
     "DataScope",
     "Data",
@@ -36,7 +36,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware", # Whitenoise middleware
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Whitenoise middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -68,12 +68,10 @@ WSGI_APPLICATION = "DataScope.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-# In production, this will use the DATABASE_URL environment variable
-# provided by Heroku.
 
 if os.environ.get('DATABASE_URL'):
     DATABASES = {
-        'default': dj_database_url.config(conn_max_age=600)
+        'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
     }
 else:
     DATABASES = {

@@ -24,35 +24,41 @@ def get_tables_and_columns(engine_type="sqlite"):
     """
     tables = []
     schemas = []
-
-    with connection.cursor() as cursor:
-        if engine_type == "sqlite":
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = [row[0] for row in cursor.fetchall()]
-            for t in tables:
-                cursor.execute(f"PRAGMA table_info('{t}');")
-                cols = cursor.fetchall()
-                if cols:
-                    col_list = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
-                    schemas.append(f"Table {t}: {col_list}")
-        elif engine_type == "postgresql":
-            cursor.execute("""
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
-            """)
-            tables = [row[0] for row in cursor.fetchall()]
-            for t in tables:
+    try:
+        with connection.cursor() as cursor:
+            if engine_type == "sqlite":
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+                tables = [row[0] for row in cursor.fetchall()]
+                for t in tables:
+                    cursor.execute(f"PRAGMA table_info('{t}');")
+                    cols = cursor.fetchall()
+                    if cols:
+                        col_list = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
+                        schemas.append(f"Table {t}: {col_list}")
+            elif engine_type == "postgresql":
                 cursor.execute("""
-                    SELECT column_name, data_type
-                    FROM information_schema.columns
-                    WHERE table_name = %s
-                    ORDER BY ordinal_position;
-                """, [t])
-                cols = cursor.fetchall()
-                if cols:
-                    col_list = ", ".join([f"{c[0]} ({c[1]})" for c in cols])
-                    schemas.append(f"Table {t}: {col_list}")
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+                """)
+                tables = [row[0] for row in cursor.fetchall()]
+                for t in tables:
+                    cursor.execute("""
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_name = %s
+                        ORDER BY ordinal_position;
+                    """, [t])
+                    cols = cursor.fetchall()
+                    if cols:
+                        col_list = ", ".join([f"{c[0]} ({c[1]})" for c in cols])
+                        schemas.append(f"Table {t}: {col_list}")
+            else:
+                print(f"❌ Tipo de motor desconocido: {engine_type}")
+    except Exception as e:
+        print(f"❌ Error obteniendo tablas y columnas ({engine_type}): {e}")
+        return [], []
+
     return tables, schemas
 
 
@@ -60,20 +66,26 @@ def get_table_schema(table_name: str, engine_type="sqlite"):
     """
     Devuelve el esquema de columnas de una tabla.
     """
-    with connection.cursor() as cursor:
-        if engine_type == "sqlite":
-            cursor.execute(f"PRAGMA table_info('{table_name}');")
-            cols = cursor.fetchall()
-            schema = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
-        elif engine_type == "postgresql":
-            cursor.execute("""
-                SELECT column_name, data_type
-                FROM information_schema.columns
-                WHERE table_name = %s
-                ORDER BY ordinal_position;
-            """, [table_name])
-            cols = cursor.fetchall()
-            schema = ", ".join([f"{c[0]} ({c[1]})" for c in cols])
+    try:
+        with connection.cursor() as cursor:
+            if engine_type == "sqlite":
+                cursor.execute(f"PRAGMA table_info('{table_name}');")
+                cols = cursor.fetchall()
+                schema = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
+            elif engine_type == "postgresql":
+                cursor.execute("""
+                    SELECT column_name, data_type
+                    FROM information_schema.columns
+                    WHERE table_name = %s
+                    ORDER BY ordinal_position;
+                """, [table_name])
+                cols = cursor.fetchall()
+                schema = ", ".join([f"{c[0]} ({c[1]})" for c in cols])
+            else:
+                schema = ""
+    except Exception as e:
+        print(f"❌ Error obteniendo esquema de tabla ({table_name}, {engine_type}): {e}")
+        return "__NLP_ERROR__"
     return schema
 
 
@@ -90,18 +102,18 @@ def get_sql_from_question(question: str, table_name: str, engine_type="sqlite") 
         schema_text = "\n".join(schemas)
 
         prompt = f"""
-        You are an expert in {engine_type}.
-        The database contains several tables:
+You are an expert in {engine_type}.
+The database contains several tables:
 
-        {schema_text}
+{schema_text}
 
-        The user question is about: "{question}"
+The user question is about: "{question}"
 
-        Generate a valid SQL query to answer the question.
-        Prefer using the table "{table_name}" if it is relevant.
+Generate a valid SQL query to answer the question.
+Prefer using the table "{table_name}" if it is relevant.
 
-        Return only the SQL query or the explanation if required.
-        """
+Return only the SQL query or the explanation if required.
+"""
 
         response = model.generate_content(prompt)
         sql_query = response.text.strip()
@@ -137,6 +149,8 @@ def get_summary_from_data(table_name: str, engine_type="sqlite") -> str:
         model = genai.GenerativeModel("models/gemini-2.5-pro")
 
         schema = get_table_schema(table_name, engine_type)
+        if schema == "__NLP_ERROR__":
+            return "__NLP_ERROR__"
 
         with connection.cursor() as cursor:
             cursor.execute(f"SELECT * FROM {table_name} LIMIT 20;")
@@ -147,17 +161,17 @@ def get_summary_from_data(table_name: str, engine_type="sqlite") -> str:
         data = "\n".join([" | ".join(map(str, row)) for row in rows])
 
         prompt = f"""
-        You are a data analyst. Given the following table schema and data, provide a summary.
+You are a data analyst. Given the following table schema and data, provide a summary.
 
-        Table: {table_name}
-        Schema: {schema}
+Table: {table_name}
+Schema: {schema}
 
-        Data:
-        {header}
-        {data}
+Data:
+{header}
+{data}
 
-        Summary:
-        """
+Summary:
+"""
 
         response = model.generate_content(prompt)
         return response.text.strip()
@@ -191,7 +205,12 @@ Return ONLY the SQL query, no explanation.
 
         api_url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
-        payload = {"model": "mistralai/mistral-7b-instruct:free", "messages": [{"role": "user", "content": prompt}], "temperature": 0.1, "max_tokens": 200}
+        payload = {
+            "model": "mistralai/mistral-7b-instruct:free",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_tokens": 200
+        }
 
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         if response.status_code != 200:
@@ -224,6 +243,8 @@ Return ONLY the SQL query, no explanation.
 def get_summary_from_data_hf(table_name: str, engine_type="postgresql") -> str:
     try:
         schema = get_table_schema(table_name, engine_type)
+        if schema == "__NLP_ERROR__":
+            return "__NLP_ERROR__"
 
         with connection.cursor() as cursor:
             cursor.execute(f"SELECT * FROM {table_name} LIMIT 20;")
@@ -246,7 +267,12 @@ Provide a concise summary of the data:"""
 
         api_url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
-        payload = {"model": "mistralai/mistral-7b-instruct:free", "messages": [{"role": "user", "content": prompt[:1500]}], "temperature": 0.3, "max_tokens": 300}
+        payload = {
+            "model": "mistralai/mistral-7b-instruct:free",
+            "messages": [{"role": "user", "content": prompt[:1500]}],
+            "temperature": 0.3,
+            "max_tokens": 300
+        }
 
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         if response.status_code != 200:
@@ -264,11 +290,7 @@ Provide a concise summary of the data:"""
 # ==================== UNIFIED WRAPPER FUNCTIONS ====================
 
 def get_sql_from_question_unified(question: str, table_name: str, model: str = "gemini", engine_type="postgresql") -> str:
-    if model == "huggingface":
-        result = get_sql_from_question_hf(question, table_name, engine_type)
-        if result == "__NLP_ERROR__":
-            result = get_sql_from_question(question, table_name, engine_type)
-    elif model == "openrouter":
+    if model in ["huggingface", "openrouter"]:
         result = get_sql_from_question_hf(question, table_name, engine_type)
         if result == "__NLP_ERROR__":
             result = get_sql_from_question(question, table_name, engine_type)
@@ -278,11 +300,7 @@ def get_sql_from_question_unified(question: str, table_name: str, model: str = "
 
 
 def get_summary_from_data_unified(table_name: str, model: str = "gemini", engine_type="postgresql") -> str:
-    if model == "huggingface":
-        result = get_summary_from_data_hf(table_name, engine_type)
-        if result == "__NLP_ERROR__":
-            result = get_summary_from_data(table_name, engine_type)
-    elif model == "openrouter":
+    if model in ["huggingface", "openrouter"]:
         result = get_summary_from_data_hf(table_name, engine_type)
         if result == "__NLP_ERROR__":
             result = get_summary_from_data(table_name, engine_type)

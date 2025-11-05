@@ -39,9 +39,24 @@ from .tables import (
 def home(request):
     return render(request, "base.html")
 
+def check_session_expired(request):
+    if request.session.get('session_expired'):
+        # Limpiar el flag
+        del request.session['session_expired']
+        messages.warning(
+            request,
+            "Your session has expired due to inactivity. Please refresh the page and log in again."
+        )
+        return True
+    return False
+
+
 
 def login_view(request):
     with translation.override("en"):
+
+        session_expired = request.COOKIES.get('session_expired') == 'true'
+
         if request.method == "POST":
             form = AuthenticationForm(request, data=request.POST)
             if form.is_valid():
@@ -50,9 +65,18 @@ def login_view(request):
                 user = authenticate(username=username, password=password)
                 if user is not None:
                     login(request, user)
-                    messages.success(request, f"¡Bienvenido, {username}!")
-                    return redirect("home")
 
+                    from django.utils import timezone
+                    request.session['last_activity'] = timezone.now().isoformat()
+                    request.session['login_time'] = timezone.now().isoformat()
+                    request.session.set_expiry(1800)  # 30 minutos en segundos
+
+                    messages.success(request, f"¡Bienvenido, {username}!")
+
+                    # Crear respuesta y limpiar cookie de expiración
+                    response = redirect("home")
+                    response.delete_cookie('session_expired')
+                    return response
                 else:
                     messages.error(request, "Usuario o contraseña inválidos.")
             else:
@@ -60,7 +84,18 @@ def login_view(request):
         else:
             form = AuthenticationForm()
 
-        return render(request, "login.html", {"form": form})
+            if session_expired:
+                messages.warning(
+                    request,
+                    "Your session has expired due to inactivity. Please log in again."
+                )
+
+        response = render(request, "login.html", {"form": form})
+
+        if session_expired:
+            response.delete_cookie('session_expired')
+
+        return response
 
 
 def register_view(request):
@@ -77,6 +112,12 @@ def register_view(request):
 
 
 def logout_view(request):
+    if 'last_activity' in request.session:
+        del request.session['last_activity']
+    if 'login_time' in request.session:
+        del request.session['login_time']
+
+
     logout(request)
     return redirect("home")
 

@@ -52,6 +52,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "Data.middleware.SessionActivityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -140,3 +141,22 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
+# ==================== AUTHENTICATION & SESSION CONFIGURATION ====================
+
+# URLs de autenticación
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'  # A dónde ir después de login
+LOGOUT_REDIRECT_URL = '/'  # A dónde ir después de logout
+
+# Configuración de sesión
+SESSION_COOKIE_AGE = 1800  # 30 minutos (cambiar a 120 para testing)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_SAVE_EVERY_REQUEST = False  # Lo manejamos en el middleware
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = False  # Cambiar a True en producción con HTTPS
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_NAME = 'datascope_sessionid'
+
+# Modelo de usuario personalizado
+AUTH_USER_MODEL = "Data.CustomUser"  # (esto ya lo tienes)

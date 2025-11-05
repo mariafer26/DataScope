@@ -4,6 +4,7 @@ import re
 import requests
 import json
 from django.db import connection
+from django.conf import settings
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
@@ -19,6 +20,86 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_MODEL_ID = os.environ.get("OPENROUTER_MODEL_ID", "deepseek/deepseek-v3-0324:free")
 
 
+# ==================== DATABASE COMPATIBILITY HELPERS ====================
+
+def get_db_engine():
+    """Detecta si estamos usando SQLite o PostgreSQL"""
+    engine = settings.DATABASES['default']['ENGINE']
+    if 'sqlite' in engine:
+        return 'sqlite'
+    elif 'postgres' in engine:
+        return 'postgresql'
+    elif 'mysql' in engine:
+        return 'mysql'
+    return 'sqlite'  # default
+
+
+def get_table_schema(table_name, cursor=None):
+    """
+    Obtiene el esquema de una tabla de forma compatible con SQLite y PostgreSQL.
+    Retorna lista de tuplas: (nombre_columna, tipo_dato)
+    """
+    close_cursor = False
+    if cursor is None:
+        cursor = connection.cursor()
+        close_cursor = True
+    
+    try:
+        db_engine = get_db_engine()
+        
+        if db_engine == 'postgresql':
+            # PostgreSQL: usar information_schema
+            cursor.execute("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = %s 
+                ORDER BY ordinal_position
+            """, [table_name])
+            columns = [(row[0], row[1]) for row in cursor.fetchall()]
+        else:
+            # SQLite: usar PRAGMA
+            cursor.execute(f"PRAGMA table_info('{table_name}');")
+            # PRAGMA retorna: (cid, name, type, notnull, dflt_value, pk)
+            columns = [(row[1], row[2]) for row in cursor.fetchall()]
+        
+        return columns
+    finally:
+        if close_cursor:
+            cursor.close()
+
+
+def get_all_tables(cursor=None):
+    """
+    Obtiene lista de todas las tablas de forma compatible.
+    """
+    close_cursor = False
+    if cursor is None:
+        cursor = connection.cursor()
+        close_cursor = True
+    
+    try:
+        db_engine = get_db_engine()
+        
+        if db_engine == 'postgresql':
+            # PostgreSQL: usar information_schema
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_type = 'BASE TABLE'
+            """)
+            tables = [row[0] for row in cursor.fetchall()]
+        else:
+            # SQLite: usar sqlite_master
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [row[0] for row in cursor.fetchall()]
+        
+        return tables
+    finally:
+        if close_cursor:
+            cursor.close()
+
+
 def get_sql_from_question(question: str, table_name: str) -> str:
     """
     Generates an SQL query from a natural language question using Google's Generative AI.
@@ -32,33 +113,35 @@ def get_sql_from_question(question: str, table_name: str) -> str:
             print(f"❌ Pregunta muy corta: {question}")
             return "__NLP_ERROR__"
         
-        # Obtener todas las tablas dentro de la misma base (no las globales del sistema)
+        # Obtener todas las tablas dentro de la misma base (compatible con SQLite y PostgreSQL)
         with connection.cursor() as cursor:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = [row[0] for row in cursor.fetchall()]
+            tables = get_all_tables(cursor)
 
         # Construir esquema de todas las tablas dentro de esa base
         schemas = []
         with connection.cursor() as cursor:
             for t in tables:
-                cursor.execute(f"PRAGMA table_info('{t}');")
-                cols = cursor.fetchall()
-                if cols:
-                    col_list = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
+                columns_info = get_table_schema(t, cursor)
+                if columns_info:
+                    col_list = ", ".join([f"{name} ({dtype})" for name, dtype in columns_info])
                     schemas.append(f"Table {t}: {col_list}")
 
         schema_text = "\n".join(schemas)
+        
+        # Detectar el motor de BD para el prompt
+        db_engine = get_db_engine()
+        db_type = "PostgreSQL" if db_engine == "postgresql" else "SQLite"
 
         prompt = f"""
-        You are an expert in SQLite.
-        The uploaded file has been imported as a temporary SQLite database.
+        You are an expert in {db_type}.
+        The uploaded file has been imported as a temporary {db_type} database.
         The database contains several tables:
 
         {schema_text}
 
         The user question is about: "{question}"
 
-        Generate a valid SQLite SQL query to answer the question.
+        Generate a valid {db_type} SQL query to answer the question.
         Prefer using the table "{table_name}" if it is relevant,
         but you can use other tables if the question explicitly mentions them.
 
@@ -166,12 +249,11 @@ def get_summary_from_data(table_name: str) -> str:
         
         model = genai.GenerativeModel("models/gemini-2.5-pro")
 
-        # Get the table schema
+        # Get the table schema (compatible con SQLite y PostgreSQL)
         with connection.cursor() as cursor:
-            cursor.execute(f"PRAGMA table_info('{table_name}');")
-            columns_info = cursor.fetchall()
+            columns_info = get_table_schema(table_name, cursor)
 
-        schema = ", ".join([f"{col[1]} ({col[2]})" for col in columns_info])
+        schema = ", ".join([f"{name} ({dtype})" for name, dtype in columns_info])
 
         # Get the first 20 rows of data
         with connection.cursor() as cursor:
@@ -213,30 +295,32 @@ def get_sql_from_question_hf(question: str, table_name: str) -> str:
             print(f"❌ Pregunta muy corta: {question}")
             return "__NLP_ERROR__"
 
-        # Obtener esquema de tablas
+        # Obtener todas las tablas dentro de la misma base (no las globales del sistema)
         with connection.cursor() as cursor:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = [row[0] for row in cursor.fetchall()]
+            tables = get_all_tables(cursor)
 
         schemas = []
         with connection.cursor() as cursor:
             for t in tables:
-                cursor.execute(f"PRAGMA table_info('{t}');")
-                cols = cursor.fetchall()
-                if cols:
-                    col_list = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
+                columns_info = get_table_schema(t, cursor)
+                if columns_info:
+                    col_list = ", ".join([f"{name} ({dtype})" for name, dtype in columns_info])
                     schemas.append(f"Table {t}: {col_list}")
 
         schema_text = "\n".join(schemas)
+        
+        # Detectar el motor de BD para el prompt
+        db_engine = get_db_engine()
+        db_type = "PostgreSQL" if db_engine == "postgresql" else "SQLite"
 
-        prompt = f"""You are an expert in SQLite.
+        prompt = f"""You are an expert in {db_type}.
 The database contains these tables:
 
 {schema_text}
 
 User question: "{question}"
 
-Generate a valid SQLite SQL query to answer this question.
+Generate a valid {db_type} SQL query to answer this question.
 Prefer using table "{table_name}" if relevant.
 Return ONLY the SQL query, no explanation or extra text.
 """
@@ -317,12 +401,11 @@ def get_summary_from_data_hf(table_name: str) -> str:
     Generates a summary of the data using Hugging Face API.
     """
     try:
-        # Get table schema
+        # Get table schema (compatible con SQLite y PostgreSQL)
         with connection.cursor() as cursor:
-            cursor.execute(f"PRAGMA table_info('{table_name}');")
-            columns_info = cursor.fetchall()
+            columns_info = get_table_schema(table_name, cursor)
 
-        schema = ", ".join([f"{col[1]} ({col[2]})" for col in columns_info])
+        schema = ", ".join([f"{name} ({dtype})" for name, dtype in columns_info])
 
         # Get sample data
         with connection.cursor() as cursor:
@@ -397,31 +480,33 @@ def get_sql_from_question_openrouter(question: str, table_name: str) -> str:
             print(f"❌ Pregunta muy corta: {question}")
             return "__NLP_ERROR__"
 
-        # Obtener esquema de tablas
+        # Obtener esquema de tablas (compatible con SQLite y PostgreSQL)
         with connection.cursor() as cursor:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = [row[0] for row in cursor.fetchall()]
+            tables = get_all_tables(cursor)
 
         schemas = []
         with connection.cursor() as cursor:
             for t in tables:
-                cursor.execute(f"PRAGMA table_info('{t}');")
-                cols = cursor.fetchall()
-                if cols:
-                    col_list = ", ".join([f"{c[1]} ({c[2]})" for c in cols])
+                columns_info = get_table_schema(t, cursor)
+                if columns_info:
+                    col_list = ", ".join([f"{name} ({dtype})" for name, dtype in columns_info])
                     schemas.append(f"Table {t}: {col_list}")
 
         schema_text = "\n".join(schemas)
+        
+        # Detectar el motor de BD para el prompt
+        db_engine = get_db_engine()
+        db_type = "PostgreSQL" if db_engine == "postgresql" else "SQLite"
 
-        prompt = f"""You are an expert in SQLite.
-The uploaded file has been imported as a temporary SQLite database.
+        prompt = f"""You are an expert in {db_type}.
+The uploaded file has been imported as a temporary {db_type} database.
 The database contains several tables:
 
 {schema_text}
 
 The user question is about: "{question}"
 
-Generate a valid SQLite SQL query to answer the question.
+Generate a valid {db_type} SQL query to answer the question.
 Prefer using the table "{table_name}" if it is relevant,
 but you can use other tables if the question explicitly mentions them.
 
@@ -493,12 +578,11 @@ def get_summary_from_data_openrouter(table_name: str) -> str:
     Generates a summary of the data using OpenRouter API.
     """
     try:
-        # Get table schema
+        # Get table schema (compatible con SQLite y PostgreSQL)
         with connection.cursor() as cursor:
-            cursor.execute(f"PRAGMA table_info('{table_name}');")
-            columns_info = cursor.fetchall()
+            columns_info = get_table_schema(table_name, cursor)
 
-        schema = ", ".join([f"{col[1]} ({col[2]})" for col in columns_info])
+        schema = ", ".join([f"{name} ({dtype})" for name, dtype in columns_info])
 
         # Get sample data
         with connection.cursor() as cursor:

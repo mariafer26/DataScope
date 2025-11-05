@@ -3,11 +3,12 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from .forms import UploadFileForm, DBConnectionForm, FavoriteQuestionForm
-from .models import UploadedFile, DataSource, FavoriteQuestion, QueryHistory
+from .models import UploadedFile, DataSource, FavoriteQuestion, QueryHistory, LLMMetrics
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import AuthenticationForm
 from .user_forms import CustomUserCreationForm
 import os
+import time
 import pandas as pd
 import json
 import re
@@ -509,6 +510,15 @@ def ask_chat_view(request, source_type, source_id):
     # --- Procesar pregunta del usuario ---
     if request.method == "POST" and "question" in request.POST:
         print("==== POST RECIBIDO ====")
+        
+        # IMPORTANTE: Obtener el modelo LLM del POST si viene (para requests AJAX)
+        # Si no viene, usar el de la sesión
+        if "current_llm" in request.POST:
+            selected_llm = request.POST.get("current_llm", "gemini")
+            print(f"🔍 Modelo LLM obtenido del POST: {selected_llm}")
+        else:
+            print(f"🔍 Modelo LLM obtenido de sesión: {selected_llm}")
+        
         question = request.POST.get("question", "").strip()
         if question:
             chat_history.append({"sender": "user", "text": question})
@@ -544,11 +554,41 @@ def ask_chat_view(request, source_type, source_id):
                             s = ai_services.get_summary_from_data_unified(tabla, selected_llm)
                             summaries.append(f"**{tabla}**:\n{s}")
                         answer = "\n\n".join(summaries)
+                        sql_query = None  # No hay SQL en resúmenes
                     else:
+                        # Registrar tiempo de inicio
+                        start_time = time.time()
+                        
+                        # Detectar qué tabla se menciona en la pregunta
+                        target_table = tablas_cargadas[0]  # default: primera tabla
+                        question_lower = question.lower()
+                        for tabla in tablas_cargadas:
+                            if tabla.lower() in question_lower:
+                                target_table = tabla
+                                break
+                        
+                        print(f"🎯 Tabla detectada: {target_table}")
+                        
                         sql_query = ai_services.get_sql_from_question_unified(
-                            f"{context_prompt}\n{question}", tablas_cargadas[0], selected_llm
+                            f"{context_prompt}\n{question}", target_table, selected_llm
                         )
+                        
+                        # Calcular tiempo de respuesta del LLM
+                        llm_response_time = time.time() - start_time
+                        
                         if sql_query == "__NLP_ERROR__":
+                            # Registrar métrica de fallo
+                            LLMMetrics.objects.create(
+                                user=request.user,
+                                llm_model=selected_llm,
+                                question=question,
+                                success=False,
+                                sql_generated=None,
+                                response_time=llm_response_time,
+                                result_count=0,
+                                error_message="LLM no pudo generar SQL válido"
+                            )
+                            
                             bot_msg = {
                                 "sender": "bot",
                                 "text": (
@@ -572,6 +612,20 @@ def ask_chat_view(request, source_type, source_id):
                             result = [
                                 dict(zip(columns, row)) for row in cursor.fetchall()
                             ]
+                        
+                        # Registrar métrica de éxito
+                        total_time = time.time() - start_time
+                        LLMMetrics.objects.create(
+                            user=request.user,
+                            llm_model=selected_llm,
+                            question=question,
+                            success=True,
+                            sql_generated=sql_query,
+                            response_time=total_time,
+                            result_count=len(result),
+                            error_message=None
+                        )
+                        
                         answer = result if result else "No se encontraron resultados."
 
                 else:
@@ -597,6 +651,23 @@ def ask_chat_view(request, source_type, source_id):
                 log_query(request.user, question, bot_msg["text"] or bot_msg["data"], selected_llm)
 
             except Exception as e:
+                # Registrar métrica de error
+                if 'start_time' in locals():
+                    error_time = time.time() - start_time
+                else:
+                    error_time = 0
+                
+                LLMMetrics.objects.create(
+                    user=request.user,
+                    llm_model=selected_llm,
+                    question=question,
+                    success=False,
+                    sql_generated=sql_query if 'sql_query' in locals() else None,
+                    response_time=error_time,
+                    result_count=0,
+                    error_message=str(e)
+                )
+                
                 bot_msg = {
                     "sender": "bot",
                     "text": f"❌ Ocurrió un error al procesar tu solicitud: {str(e)}",
@@ -647,6 +718,61 @@ def ask_chat_view(request, source_type, source_id):
 def dashboard_view(request):
     files = UploadedFile.objects.filter(user=request.user)
     return render(request, "dashboard.html", {"files": files})
+
+
+@login_required
+def llm_comparison_view(request):
+    """
+    Vista para comparar la precisión y rendimiento de los diferentes modelos LLM
+    """
+    from django.db.models import Count, Avg, Q
+    
+    # Obtener métricas del usuario actual
+    user_metrics = LLMMetrics.objects.filter(user=request.user)
+    
+    # Estadísticas por modelo
+    stats_by_model = {}
+    for model_code, model_name in LLMMetrics.LLM_CHOICES:
+        model_metrics = user_metrics.filter(llm_model=model_code)
+        total_queries = model_metrics.count()
+        
+        if total_queries > 0:
+            successful = model_metrics.filter(success=True).count()
+            failed = model_metrics.filter(success=False).count()
+            success_rate = (successful / total_queries) * 100
+            avg_response_time = model_metrics.aggregate(Avg('response_time'))['response_time__avg'] or 0
+            avg_results = model_metrics.filter(success=True).aggregate(Avg('result_count'))['result_count__avg'] or 0
+            
+            stats_by_model[model_code] = {
+                'name': model_name,
+                'total': total_queries,
+                'successful': successful,
+                'failed': failed,
+                'success_rate': round(success_rate, 2),
+                'avg_response_time': round(avg_response_time, 3),
+                'avg_results': round(avg_results, 1)
+            }
+    
+    # Últimas consultas con detalles
+    recent_queries = user_metrics.order_by('-timestamp')[:20]
+    
+    # Errores comunes por modelo
+    common_errors = {}
+    for model_code, model_name in LLMMetrics.LLM_CHOICES:
+        errors = user_metrics.filter(
+            llm_model=model_code, 
+            success=False, 
+            error_message__isnull=False
+        ).values('error_message').annotate(count=Count('error_message')).order_by('-count')[:5]
+        common_errors[model_code] = errors
+    
+    context = {
+        'stats_by_model': stats_by_model,
+        'recent_queries': recent_queries,
+        'common_errors': common_errors,
+    }
+    
+    return render(request, "llm_comparison.html", context)
 
 
 @login_required

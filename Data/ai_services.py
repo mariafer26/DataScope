@@ -109,9 +109,16 @@ def get_sql_from_question(question: str, table_name: str) -> str:
         return sql_query
 
     except Exception as e:
-        print(f"❌ Error en get_sql_from_question (Gemini): {str(e)}")
-        import traceback
-        traceback.print_exc()
+        error_msg = str(e)
+        
+        # Detectar error de quota de Gemini
+        if "429" in error_msg or "quota" in error_msg.lower():
+            print(f"⚠️ Gemini quota excedida - considera usar OpenRouter o esperar")
+        else:
+            print(f"❌ Error en get_sql_from_question (Gemini): {error_msg}")
+            import traceback
+            traceback.print_exc()
+        
         return "__NLP_ERROR__"
 
 
@@ -234,33 +241,40 @@ Prefer using table "{table_name}" if relevant.
 Return ONLY the SQL query, no explanation or extra text.
 """
 
-        # Llamada a Hugging Face API - usando un modelo más confiable
-        api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-        headers = {"Authorization": f"Bearer {HUGGING_API_KEY}"}
+        # Usar Mistral a través de OpenRouter (modelo gratuito y confiable)
+        # Esto soluciona el problema del endpoint deprecado de HuggingFace
+        api_url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        }
         
-        # Formato específico para modelos de chat
+        # Usar Mistral 7B gratuito en lugar de modelos de HuggingFace deprecados
         payload = {
-            "inputs": f"<s>[INST] {prompt} [/INST]",
-            "parameters": {
-                "max_new_tokens": 200,
-                "temperature": 0.1,
-                "return_full_text": False
-            }
+            "model": "mistralai/mistral-7b-instruct:free",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 200
         }
 
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         
+        print(f"🔍 HF (Mistral via OpenRouter) SQL Response Status: {response.status_code}")
+        
         if response.status_code != 200:
+            print(f"❌ HF SQL Error: {response.text}")
             return "__NLP_ERROR__"
 
         result = response.json()
+        print(f"🔍 HF SQL Response: {result}")
         
-        # Extraer texto de la respuesta
-        if isinstance(result, list) and len(result) > 0:
-            sql_query = result[0].get("generated_text", "")
-        elif isinstance(result, dict):
-            sql_query = result.get("generated_text", "")
-        else:
+        # Extraer respuesta de OpenRouter (formato de chat completion)
+        try:
+            sql_query = result["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError) as e:
+            print(f"❌ HF SQL formato inesperado: {e}")
             return "__NLP_ERROR__"
 
         sql_query = sql_query.strip()
@@ -330,35 +344,41 @@ Data:
 
 Provide a concise summary of the data:"""
 
-        # Llamada a Hugging Face API - usando Mistral para mejor compatibilidad
-        api_url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-        headers = {"Authorization": f"Bearer {HUGGING_API_KEY}"}
+        # Usar Mistral a través de OpenRouter (modelo gratuito y confiable)
+        api_url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json"
+        }
         
         payload = {
-            "inputs": f"<s>[INST] {prompt[:1000]} [/INST]",  # Limitar tamaño
-            "parameters": {
-                "max_new_tokens": 300,
-                "temperature": 0.3,
-                "return_full_text": False
-            }
+            "model": "mistralai/mistral-7b-instruct:free",
+            "messages": [
+                {"role": "user", "content": prompt[:1500]}  # Limitar tamaño
+            ],
+            "temperature": 0.3,
+            "max_tokens": 300
         }
 
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
         
+        print(f"🔍 HF (Mistral via OpenRouter) Summary Response Status: {response.status_code}")
+        
         if response.status_code != 200:
+            print(f"❌ HF Summary Error: {response.text}")
             return "__NLP_ERROR__"
 
         result = response.json()
+        print(f"🔍 HF Summary Response: {result}")
         
-        # Extraer texto de la respuesta
-        if isinstance(result, list) and len(result) > 0:
-            summary = result[0].get("generated_text", "")
-        elif isinstance(result, dict):
-            summary = result.get("generated_text", "") or result.get("summary_text", "")
-        else:
+        # Extraer respuesta de OpenRouter (formato de chat completion)
+        try:
+            summary = result["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError) as e:
+            print(f"❌ HF Summary formato inesperado: {e}")
             return "__NLP_ERROR__"
 
-        return summary.strip() if summary else "__NLP_ERROR__"
+        return summary if summary else "__NLP_ERROR__"
 
     except Exception as e:
         print(f"Error en Hugging Face summary: {str(e)}")
@@ -534,6 +554,7 @@ Summary:
 def get_sql_from_question_unified(question: str, table_name: str, model: str = "gemini") -> str:
     """
     Unified function to generate SQL query using the selected LLM model.
+    Con fallback automático a Gemini si el modelo seleccionado falla.
     
     Args:
         question: Natural language question
@@ -547,10 +568,19 @@ def get_sql_from_question_unified(question: str, table_name: str, model: str = "
     print(f"🔍 DEBUG: Pregunta: {question}")
     print(f"🔍 DEBUG: Tabla: {table_name}")
     
+    # Intentar con el modelo seleccionado
     if model == "huggingface":
         result = get_sql_from_question_hf(question, table_name)
+        # Fallback a OpenRouter si HuggingFace falla (mejor que Gemini por límites de quota)
+        if result == "__NLP_ERROR__":
+            print(f"⚠️ HuggingFace falló, usando OpenRouter como fallback")
+            result = get_sql_from_question_openrouter(question, table_name)
     elif model == "openrouter":
         result = get_sql_from_question_openrouter(question, table_name)
+        # Fallback a Gemini si OpenRouter falla
+        if result == "__NLP_ERROR__":
+            print(f"⚠️ OpenRouter falló, usando Gemini como fallback")
+            result = get_sql_from_question(question, table_name)
     else:  # default to gemini
         result = get_sql_from_question(question, table_name)
     
@@ -561,6 +591,7 @@ def get_sql_from_question_unified(question: str, table_name: str, model: str = "
 def get_summary_from_data_unified(table_name: str, model: str = "gemini") -> str:
     """
     Unified function to generate data summary using the selected LLM model.
+    Con fallback automático a Gemini si el modelo seleccionado falla.
     
     Args:
         table_name: Name of the table to summarize
@@ -569,9 +600,20 @@ def get_summary_from_data_unified(table_name: str, model: str = "gemini") -> str
     Returns:
         Summary text or "__NLP_ERROR__" if failed
     """
+    # Intentar con el modelo seleccionado
     if model == "huggingface":
-        return get_summary_from_data_hf(table_name)
+        result = get_summary_from_data_hf(table_name)
+        # Fallback a OpenRouter si HuggingFace falla (mejor que Gemini por límites de quota)
+        if result == "__NLP_ERROR__":
+            print(f"⚠️ HuggingFace summary falló, usando OpenRouter como fallback")
+            result = get_summary_from_data_openrouter(table_name)
+        return result
     elif model == "openrouter":
-        return get_summary_from_data_openrouter(table_name)
+        result = get_summary_from_data_openrouter(table_name)
+        # Fallback a Gemini si OpenRouter falla
+        if result == "__NLP_ERROR__":
+            print(f"⚠️ OpenRouter summary falló, usando Gemini como fallback")
+            result = get_summary_from_data(table_name)
+        return result
     else:  # default to gemini
         return get_summary_from_data(table_name)

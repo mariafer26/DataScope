@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}LLM Comparison - DataScope{% endblock %}
+
+{% block extra_css %}
+<style>
+.comparison-container {
+  max-width: 1400px;
+  margin: 6rem auto 2rem;
+  padding: 2rem;
+}
+
+.comparison-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.comparison-header h1 {
+  color: #2D1B69;
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+
+.comparison-header p {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.model-card {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.model-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.model-card.gemini {
+  border-top: 4px solid #4285F4;
+}
+
+.model-card.huggingface {
+  border-top: 4px solid #FFD21E;
+}
+
+.model-card.openrouter {
+  border-top: 4px solid #10a37f;
+}
+
+.model-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2D1B69;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metric {
+  margin-bottom: 1.2rem;
+}
+
+.metric-label {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #2D1B69;
+}
+
+.metric-value.success {
+  color: #2e7d32;
+}
+
+.metric-value.warning {
+  color: #f57c00;
+}
+
+.metric-subtext {
+  font-size: 0.85rem;
+  color: #999;
+  margin-top: 0.2rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2D1B69, #8B45C7);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.recent-queries-section {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #2D1B69;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.query-item {
+  padding: 1rem;
+  border-left: 3px solid #e0e0e0;
+  margin-bottom: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.query-item:hover {
+  background: #f5f3ff;
+  border-left-color: #8B45C7;
+}
+
+.query-item.success {
+  border-left-color: #4caf50;
+}
+
+.query-item.failed {
+  border-left-color: #f44336;
+}
+
+.query-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.query-question {
+  font-weight: 600;
+  color: #2D1B69;
+  flex: 1;
+}
+
+.query-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #666;
+  flex-wrap: wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge.success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge.failed {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge.gemini {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.badge.huggingface {
+  background: #fffde7;
+  color: #f57f17;
+}
+
+.badge.openrouter {
+  background: #e0f2f1;
+  color: #00695c;
+}
+
+.no-data {
+  text-align: center;
+  padding: 3rem;
+  color: #999;
+}
+
+.no-data-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.comparison-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.8rem 2rem;
+  background: linear-gradient(135deg, #2D1B69, #8B45C7);
+  color: white;
+  text-decoration: none;
+  border-radius: 30px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.comparison-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(45, 27, 105, 0.4);
+  color: white;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="comparison-container">
+  <div class="comparison-header">
+    <h1>🤖 LLM Precision Comparison</h1>
+    <p>Compare the performance and accuracy of different AI models</p>
+  </div>
+
+  {% if stats_by_model %}
+    <div class="stats-grid">
+      {% for model_code, stats in stats_by_model.items %}
+        <div class="model-card {{ model_code }}">
+          <div class="model-name">
+            {% if model_code == 'gemini' %}🔵
+            {% elif model_code == 'huggingface' %}🟡
+            {% elif model_code == 'openrouter' %}🟢
+            {% endif %}
+            {{ stats.name }}
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-value success">{{ stats.success_rate }}%</div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: {{ stats.success_rate }}%"></div>
+            </div>
+            <div class="metric-subtext">{{ stats.successful }} successful / {{ stats.total }} total</div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Avg Response Time</div>
+            <div class="metric-value">{{ stats.avg_response_time }}s</div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Avg Results Returned</div>
+            <div class="metric-value">{{ stats.avg_results }}</div>
+            <div class="metric-subtext">rows per query</div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Failed Queries</div>
+            <div class="metric-value warning">{{ stats.failed }}</div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="recent-queries-section">
+      <h2 class="section-title">📊 Recent Queries</h2>
+      {% if recent_queries %}
+        {% for query in recent_queries %}
+          <div class="query-item {% if query.success %}success{% else %}failed{% endif %}">
+            <div class="query-header">
+              <div class="query-question">{{ query.question }}</div>
+              <div class="query-meta">
+                <span class="badge {{ query.llm_model }}">{{ query.get_llm_model_display }}</span>
+                <span class="badge {% if query.success %}success{% else %}failed{% endif %}">
+                  {% if query.success %}✅ Success{% else %}❌ Failed{% endif %}
+                </span>
+                <span>⏱️ {{ query.response_time|floatformat:3 }}s</span>
+                {% if query.success %}
+                  <span>📄 {{ query.result_count }} results</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if not query.success and query.error_message %}
+              <div style="color: #c62828; font-size: 0.85rem; margin-top: 0.5rem;">
+                Error: {{ query.error_message|truncatewords:20 }}
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="no-data">
+          <div class="no-data-icon">📭</div>
+          <p>No queries recorded yet. Start chatting to see statistics!</p>
+        </div>
+      {% endif %}
+    </div>
+
+  {% else %}
+    <div class="recent-queries-section">
+      <div class="no-data">
+        <div class="no-data-icon">📊</div>
+        <h3 style="color: #2D1B69;">No Data Available Yet</h3>
+        <p>Start using the AI chat to generate comparison statistics.</p>
+        <a href="{% url 'dashboard' %}" class="comparison-link">Go to Dashboard</a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

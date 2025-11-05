@@ -270,6 +270,29 @@ Analyze Data - DataScope
   {% if chart_config %}
 <section class="results-container" style="margin-top:2rem">
   <h2 class="results-title">Visualization</h2>
+  
+  <!-- Chart Type Selector -->
+  <div class="chart-selector-container" style="margin-bottom: 1rem; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+    <button class="chart-type-btn active" data-type="bar" title="Bar Chart">
+      <span style="font-size: 1.2rem;">📊</span> Bar
+    </button>
+    <button class="chart-type-btn" data-type="line" title="Line Chart">
+      <span style="font-size: 1.2rem;">📈</span> Line
+    </button>
+    <button class="chart-type-btn" data-type="pie" title="Pie Chart">
+      <span style="font-size: 1.2rem;">🥧</span> Pie
+    </button>
+    <button class="chart-type-btn" data-type="doughnut" title="Doughnut Chart">
+      <span style="font-size: 1.2rem;">🍩</span> Doughnut
+    </button>
+    <button class="chart-type-btn" data-type="radar" title="Radar Chart">
+      <span style="font-size: 1.2rem;">📡</span> Radar
+    </button>
+    <button class="chart-type-btn" data-type="polarArea" title="Polar Area Chart">
+      <span style="font-size: 1.2rem;">🎯</span> Polar
+    </button>
+  </div>
+  
   <div class="card chart-wrap" style="padding:1rem; border-radius:16px;">
     <canvas id="resultChart"></canvas>
   </div>
@@ -330,6 +353,40 @@ Analyze Data - DataScope
 
 {% block extra_js %}
 {% if chart_config %}
+<style>
+  .chart-type-btn {
+    padding: 0.75rem 1.25rem;
+    border: 2px solid #8B45C7;
+    background: white;
+    color: #8B45C7;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .chart-type-btn:hover {
+    background: rgba(139, 69, 199, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139, 69, 199, 0.2);
+  }
+
+  .chart-type-btn.active {
+    background: linear-gradient(135deg, #8B45C7 0%, #6A2C9E 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(139, 69, 199, 0.3);
+  }
+
+  .chart-type-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+
 <script>
   (function () {
     try {
@@ -337,8 +394,78 @@ Analyze Data - DataScope
       const el = document.getElementById('resultChart');
       if (!el) return;
       const ctx = el.getContext('2d');
-      if (window._resultChart) { window._resultChart.destroy(); }
+      
+      // Store original chart type
+      const originalType = cfg.type || 'bar';
+      
+      // Destroy existing chart if any
+      if (window._resultChart) { 
+        window._resultChart.destroy(); 
+      }
+      
+      // Create chart with current config
       window._resultChart = new Chart(ctx, cfg);
+      
+      // Function to update chart type
+      function updateChartType(newType) {
+        if (!window._resultChart) return;
+        
+        // Destroy current chart
+        window._resultChart.destroy();
+        
+        // Update config with new type
+        cfg.type = newType;
+        
+        // Adjust options based on chart type
+        if (newType === 'pie' || newType === 'doughnut' || newType === 'polarArea') {
+          // Remove scales for circular charts
+          if (cfg.options && cfg.options.scales) {
+            delete cfg.options.scales;
+          }
+        } else if (newType === 'radar') {
+          // Radar charts need different scale config
+          cfg.options = cfg.options || {};
+          cfg.options.scales = {
+            r: {
+              beginAtZero: true
+            }
+          };
+        } else {
+          // Restore scales for cartesian charts
+          cfg.options = cfg.options || {};
+          cfg.options.scales = cfg.options.scales || {
+            x: { beginAtZero: true },
+            y: { beginAtZero: true }
+          };
+        }
+        
+        // Recreate chart
+        window._resultChart = new Chart(ctx, cfg);
+      }
+      
+      // Add click handlers to chart type buttons
+      document.querySelectorAll('.chart-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const chartType = this.getAttribute('data-type');
+          
+          // Update active state
+          document.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          
+          // Update chart
+          updateChartType(chartType);
+          
+          console.log('📊 Chart type changed to:', chartType);
+        });
+      });
+      
+      // Set initial active button based on original chart type
+      const initialBtn = document.querySelector(`.chart-type-btn[data-type="${originalType}"]`);
+      if (initialBtn) {
+        document.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'));
+        initialBtn.classList.add('active');
+      }
+      
     } catch (e) {
       console.error('Chart config error:', e);
     }

@@ -188,3 +188,48 @@ class QueryHistory(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.question[:50]}..."
+
+
+class LLMMetrics(models.Model):
+    """
+    Modelo para registrar métricas de precisión y rendimiento de los LLMs
+    """
+    LLM_CHOICES = (
+        ("gemini", "Google Gemini"),
+        ("huggingface", "Hugging Face"),
+        ("openrouter", "OpenRouter"),
+    )
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    llm_model = models.CharField(max_length=20, choices=LLM_CHOICES)
+    question = models.TextField()
+    
+    # Métricas de éxito
+    success = models.BooleanField(default=False, help_text="Si la consulta se ejecutó exitosamente")
+    sql_generated = models.TextField(blank=True, null=True, help_text="SQL generado por el LLM")
+    
+    # Métricas de rendimiento
+    response_time = models.FloatField(help_text="Tiempo de respuesta en segundos")
+    result_count = models.IntegerField(default=0, help_text="Número de resultados retornados")
+    
+    # Detalles del error (si hubo)
+    error_message = models.TextField(blank=True, null=True)
+    
+    # Comparación con "ground truth" si está disponible
+    matches_expected = models.BooleanField(
+        null=True, 
+        blank=True,
+        help_text="Si el resultado coincide con el esperado (si se conoce)"
+    )
+    
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ["-timestamp"]
+        verbose_name = "LLM Metric"
+        verbose_name_plural = "LLM Metrics"
+    
+    def __str__(self):
+        status = "✅" if self.success else "❌"
+        return f"{status} {self.llm_model} - {self.question[:30]}... ({self.response_time:.2f}s)"
+

@@ -14,3 +14,6 @@ reportlab
 pytest
 ujson>=5.8.0
 requests
+gunicorn
+dj-database-url
+whitenoise

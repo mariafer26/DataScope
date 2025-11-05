@@ -1,0 +1,1 @@
+web: gunicorn DataScope.wsgi --log-file -

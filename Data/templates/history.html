@@ -1,45 +1,412 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="container mt-5">
-  <div class="card shadow-lg border-0 rounded-4">
-    <div class="card-body">
-      <h2 class="fw-bold text-center mb-4">Query History</h2>
-      {% if page_obj %}
-      <div class="table-responsive">
-        <table class="table align-middle table-hover">
-          <thead class="table-light">
-            <tr>
-              <th>Date</th>
-              <th>Question</th>
-              <th>Result Preview</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in page_obj %}
-            <tr>
-              <td>{{ item.created_at|date:"Y-m-d H:i" }}</td>
-              <td class="text-break">{{ item.question }}</td>
-              <td class="text-break text-muted">{{ item.result_preview|truncatechars:120 }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <nav class="d-flex justify-content-center mt-4">
-        <ul class="pagination">
-          {% if page_obj.has_previous %}
-          <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
-          {% endif %}
-          <li class="page-item active"><a class="page-link">{{ page_obj.number }}</a></li>
-          {% if page_obj.has_next %}
-          <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
-          {% endif %}
-        </ul>
-      </nav>
-      {% else %}
-      <p class="text-center text-muted mt-3">No queries logged yet.</p>
-      {% endif %}
-    </div>
+<style>
+  .history-container {
+    max-width: 1200px;
+    margin: 8rem auto 4rem;
+    padding: 0 2rem;
+  }
+
+  .history-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .history-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #8B45C7 0%, #6A2C9E 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+
+  .history-header p {
+    color: #666;
+    font-size: 1.1rem;
+  }
+
+  .history-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .stat-card {
+    background: linear-gradient(135deg, rgba(139, 69, 199, 0.1) 0%, rgba(106, 44, 158, 0.05) 100%);
+    padding: 1.5rem 2rem;
+    border-radius: 16px;
+    border: 2px solid rgba(139, 69, 199, 0.2);
+    text-align: center;
+    min-width: 180px;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #8B45C7;
+    margin-bottom: 0.25rem;
+  }
+
+  .stat-label {
+    color: #666;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .history-timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+
+  .history-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #8B45C7 0%, rgba(139, 69, 199, 0.2) 100%);
+    border-radius: 2px;
+  }
+
+  .history-item {
+    position: relative;
+    background: white;
+    border: 2px solid rgba(139, 69, 199, 0.1);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .history-item:hover {
+    transform: translateX(8px);
+    border-color: rgba(139, 69, 199, 0.3);
+    box-shadow: 0 8px 24px rgba(139, 69, 199, 0.15);
+  }
+
+  .history-item::before {
+    content: '';
+    position: absolute;
+    left: -2.65rem;
+    top: 1.5rem;
+    width: 16px;
+    height: 16px;
+    background: #8B45C7;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(139, 69, 199, 0.2);
+  }
+
+  .history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .history-date {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #8B45C7;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .history-date-icon {
+    font-size: 1.2rem;
+  }
+
+  .history-llm-badge {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .llm-gemini {
+    background: linear-gradient(135deg, #4285F4 0%, #34A853 100%);
+    color: white;
+  }
+
+  .llm-huggingface {
+    background: linear-gradient(135deg, #FFD21E 0%, #FF9D0B 100%);
+    color: #333;
+  }
+
+  .llm-openrouter {
+    background: linear-gradient(135deg, #FF6B6B 0%, #C44569 100%);
+    color: white;
+  }
+
+  .history-question {
+    background: rgba(139, 69, 199, 0.05);
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    border-left: 4px solid #8B45C7;
+    margin-bottom: 1rem;
+  }
+
+  .history-question-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #8B45C7;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+  }
+
+  .history-question-text {
+    color: #2D1B69;
+    font-size: 1.05rem;
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  .history-result {
+    background: #f8f9fa;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+  }
+
+  .history-result-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #666;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+  }
+
+  .history-result-text {
+    color: #495057;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  .pagination-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 3rem;
+  }
+
+  .pagination {
+    display: flex;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+  }
+
+  .pagination li {
+    margin: 0;
+  }
+
+  .pagination .page-link {
+    padding: 0.75rem 1.25rem;
+    border: 2px solid rgba(139, 69, 199, 0.2);
+    background: white;
+    color: #8B45C7;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .pagination .page-link:hover {
+    background: rgba(139, 69, 199, 0.1);
+    border-color: #8B45C7;
+    transform: translateY(-2px);
+  }
+
+  .pagination .page-item.active .page-link {
+    background: linear-gradient(135deg, #8B45C7 0%, #6A2C9E 100%);
+    color: white;
+    border-color: #8B45C7;
+  }
+
+  .pagination .page-item.disabled .page-link {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+
+  .empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+  }
+
+  .empty-state h3 {
+    color: #2D1B69;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-state p {
+    color: #666;
+    font-size: 1.1rem;
+  }
+
+  .empty-state-btn {
+    margin-top: 2rem;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #8B45C7 0%, #6A2C9E 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+  }
+
+  .empty-state-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(139, 69, 199, 0.3);
+    color: white;
+  }
+
+  @media (max-width: 768px) {
+    .history-container {
+      margin-top: 6rem;
+      padding: 0 1rem;
+    }
+
+    .history-header h1 {
+      font-size: 2rem;
+    }
+
+    .history-timeline {
+      padding-left: 1.5rem;
+    }
+
+    .history-item::before {
+      left: -2.15rem;
+    }
+
+    .history-item-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .stat-card {
+      min-width: 150px;
+      padding: 1rem 1.5rem;
+    }
+  }
+</style>
+
+<div class="history-container">
+  <div class="history-header">
+    <h1>📜 Query History</h1>
+    <p>Track all your data exploration questions and insights</p>
   </div>
+
+  {% if page_obj %}
+    <!-- Statistics Cards -->
+    <div class="history-stats">
+      <div class="stat-card">
+        <div class="stat-value">{{ page_obj.paginator.count }}</div>
+        <div class="stat-label">Total Queries</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ page_obj|length }}</div>
+        <div class="stat-label">This Page</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ page_obj.paginator.num_pages }}</div>
+        <div class="stat-label">Total Pages</div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="history-timeline">
+      {% for item in page_obj %}
+      <div class="history-item">
+        <div class="history-item-header">
+          <div class="history-date">
+            <span class="history-date-icon">🕐</span>
+            <span>{{ item.created_at|date:"F d, Y - H:i" }}</span>
+          </div>
+          {% if item.llm_model %}
+          <span class="history-llm-badge llm-{{ item.llm_model|lower }}">
+            {% if item.llm_model == 'gemini' %}
+              🤖 Gemini
+            {% elif item.llm_model == 'huggingface' %}
+              🤗 HuggingFace
+            {% elif item.llm_model == 'openrouter' %}
+              🚀 OpenRouter
+            {% else %}
+              {{ item.llm_model }}
+            {% endif %}
+          </span>
+          {% endif %}
+        </div>
+
+        <div class="history-question">
+          <div class="history-question-label">Question</div>
+          <div class="history-question-text">{{ item.question }}</div>
+        </div>
+
+        <div class="history-result">
+          <div class="history-result-label">Result Preview</div>
+          <div class="history-result-text">{{ item.result_preview|truncatechars:150 }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    <nav class="pagination-container">
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page=1">« First</a>
+        </li>
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹ Previous</a>
+        </li>
+        {% endif %}
+
+        <li class="page-item active">
+          <a class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</a>
+        </li>
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next ›</a>
+        </li>
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last »</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  {% else %}
+    <!-- Empty State -->
+    <div class="empty-state">
+      <div class="empty-state-icon">🔍</div>
+      <h3>No Query History Yet</h3>
+      <p>Start exploring your data to see your query history here</p>
+      <a href="{% url 'dashboard' %}" class="empty-state-btn">
+        📊 Go to Dashboard
+      </a>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}
